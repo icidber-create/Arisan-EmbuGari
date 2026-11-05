@@ -1,0 +1,3013 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arisan Keluarga Besar EmbuGari</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK (Compat Version) -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+  <style>
+    @keyframes pulse-fast { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+    .kocok-animasi { animation: pulse-fast 0.1s infinite; }
+    /* Mode Tamu (Anggota Hanya Lihat) */
+    body.mode-tamu .khusus-admin { display: none !important; }
+    body.mode-tamu .kunci-interaksi { cursor: not-allowed !important; opacity: 0.9; }
+    /* Mode Tamu: Sembunyikan Kas Operasional dan sesuaikan grid kartu */
+    body.mode-tamu .hanya-untuk-admin { display: none !important; }
+    body.mode-tamu #grid-kartu-utama { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
+    @media (min-width: 640px) {
+      body.mode-tamu #grid-kartu-utama { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-2.5 sm:p-5 font-sans flex flex-col justify-between mode-tamu">
+  <div class="max-w-6xl mx-auto w-full space-y-4 flex-1">
+
+    <!-- Header dengan Logo Resmi & Identitas Pembuat -->
+    <header class="bg-gradient-to-r from-indigo-800 via-indigo-900 to-slate-900 text-white p-3.5 sm:p-5 rounded-2xl shadow flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div class="flex items-center gap-3 text-center sm:text-left flex-col sm:flex-row">
+        <img src="https://i.ibb.co.com/23zS5FnL/file-0000000088348207851ceed72d56c6e0.png" alt="Logo" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-indigo-300 bg-white shrink-0 shadow">
+        <div>
+          <h1 class="text-xl sm:text-2xl font-black">Arisan Keluarga Besar EmbuGari</h1>
+          <p class="text-indigo-200 text-xs">Pengundian Lot, Setoran, Pinjaman & Kas Jimpitan</p>
+          <div class="flex flex-wrap items-center gap-2 mt-1 justify-center sm:justify-start">
+            <span class="inline-block bg-indigo-700/60 text-indigo-100 text-[10px] px-2 py-0.5 rounded-full border border-indigo-400/30">
+              👨‍💻 Dibuat oleh: <strong class="text-amber-300">Irwan</strong>
+            </span>
+            <!-- Indikator Cloud -->
+            <span id="status-cloud" class="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full border border-amber-400/40">
+              🔄 Menghubungkan Cloud...
+            </span>
+            <!-- Tombol Kunci / Mode Admin -->
+            <button id="btn-mode-admin" onclick="tanganiKlikTombolAdmin()" class="inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-amber-300 shadow-xs transition">
+              🔒 Mode Anggota (Buka Kunci PIN)
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-center gap-1.5 text-xs">
+        <div class="flex bg-indigo-950/60 p-0.5 rounded-full border border-indigo-400/30 khusus-admin">
+          <button id="btn-undo" onclick="undoAksi()" disabled class="px-2.5 py-1 bg-indigo-700/80 hover:bg-indigo-600 disabled:opacity-30 rounded-l-full font-semibold">↩️ Undo</button>
+          <button id="btn-redo" onclick="redoAksi()" disabled class="px-2.5 py-1 bg-indigo-700/80 hover:bg-indigo-600 disabled:opacity-30 rounded-r-full font-semibold border-l border-indigo-400/20">↪️ Redo</button>
+        </div>
+        <button onclick="bukaModalGantiPin()" class="bg-purple-700 hover:bg-purple-800 px-3 py-1 rounded-full font-semibold shadow-xs khusus-admin">🔑 Ganti PIN</button>
+        <button onclick="bukaModalBackup()" class="bg-emerald-600 hover:bg-emerald-700 px-3 py-1 rounded-full font-semibold shadow-xs">📥 Backup</button>
+        <button onclick="bukaModalImpor()" class="bg-amber-600 hover:bg-amber-700 px-3 py-1 rounded-full font-semibold shadow-xs khusus-admin">📤 Impor</button>
+      </div>
+    </header>
+
+    <!-- Navigasi Menu Tab -->
+    <nav class="flex bg-white rounded-xl p-1 shadow-xs gap-1 text-xs sm:text-sm">
+      <button id="tab-btn-undian" onclick="gantiTab('undian')" class="flex-1 py-2 font-bold rounded-lg bg-indigo-700 text-white shadow-xs">🎲 Pengundian Lot</button>
+      <button id="tab-btn-setoran" onclick="gantiTab('setoran')" class="flex-1 py-2 font-bold rounded-lg text-slate-600 hover:text-indigo-700">💰 Checklist Setoran (100rb)</button>
+      <button id="tab-btn-jimpitan" onclick="gantiTab('jimpitan')" class="flex-1 py-2 font-bold rounded-lg text-slate-600 hover:text-indigo-700">🏦 Tabungan & Kas Jimpitan</button>
+    </nav>
+
+    <!-- ================= TAB 1: PENGUNDIAN LOT ================= -->
+    <div id="halaman-undian" class="space-y-3.5">
+      <div class="bg-white p-3 rounded-xl shadow-xs border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-600">🎯 Periode Undian:</span>
+          <select id="pilihan-periode-undian" onchange="gantiPeriodeUndianAktif(this.value)" class="px-2.5 py-1 border border-indigo-300 rounded-lg bg-indigo-50/60 font-bold text-indigo-950 outline-none"></select>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-500">Tampilan:</span>
+          <div class="inline-flex rounded-lg border p-0.5 bg-slate-50">
+            <button id="btn-filter-undian-khusus" onclick="setFilterUndianTampilan('khusus')" class="px-2 py-0.5 rounded font-bold bg-indigo-700 text-white">Khusus Periode Ini</button>
+            <button id="btn-filter-undian-semua" onclick="setFilterUndianTampilan('semua')" class="px-2 py-0.5 rounded text-slate-600">Semua Anggota</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Panel Anggota -->
+        <section class="lg:col-span-1 bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col">
+          <div class="flex justify-between items-center mb-1">
+            <h2 class="font-bold text-sm text-slate-900">Daftar Anggota</h2>
+            <span id="badge-total" class="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">...</span>
+          </div>
+          <p class="text-[10px] text-slate-400 mb-2">Klik status untuk mengatur keikutsertaan di periode ini.</p>
+          <form id="form-anggota" class="flex gap-1.5 mb-2 khusus-admin">
+            <input type="text" id="input-nama" placeholder="Tambah nama..." class="flex-1 px-2.5 py-1 border rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500">
+            <button type="submit" class="bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-1 rounded-lg text-xs font-bold">+</button>
+          </form>
+          <div class="flex justify-between items-center text-[11px] text-slate-500 border-b pb-1.5 mb-1.5">
+            <span id="label-total">Ikut: 0</span>
+            <span id="label-sisa" class="font-bold text-amber-600">Belum Menang: 0</span>
+          </div>
+          <ul id="daftar-anggota" class="space-y-1 overflow-y-auto max-h-[400px] pr-1 text-xs flex-1"></ul>
+        </section>
+
+        <!-- Panel Pengundian & Riwayat -->
+        <section class="lg:col-span-2 space-y-3.5">
+          <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-3 text-xs">
+              <div class="flex items-center gap-1.5 bg-slate-50 p-2 rounded-lg border">
+                <span class="font-semibold text-slate-700">Lot ke:</span>
+                <input type="number" id="input-lot-ke" value="10" class="w-14 px-1.5 py-0.5 text-center font-bold border rounded outline-none text-indigo-900" min="1">
+              </div>
+              <div class="flex flex-col gap-0.5 bg-slate-50 p-2 rounded-lg border">
+                <span class="font-semibold text-slate-700">Penerima per Lot:</span>
+                <select id="pilihan-jumlah-pemenang" class="border rounded px-1.5 py-0.5 bg-white font-medium outline-none">
+                  <option value="2" selected>2 Orang (Standar)</option>
+                  <option value="3">3 Orang (Khusus Lot ke-12)</option>
+                  <option value="1">1 Orang</option>
+                  <option value="4">4 Orang</option>
+                </select>
+              </div>
+              <div class="flex flex-col gap-0.5 bg-slate-50 p-2 rounded-lg border">
+                <span class="font-semibold text-slate-700">Tuan Rumah:</span>
+                <select id="pilihan-tuan-rumah" class="border rounded px-1.5 py-0.5 bg-white font-medium outline-none">
+                  <option value="">-- Pilih Tuan Rumah --</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="h-28 flex items-center justify-center bg-slate-50 rounded-xl mb-3 border-2 border-dashed border-indigo-200 p-2 text-center" id="wadah-layar">
+              <span id="layar-kocok" class="text-lg sm:text-xl font-black text-indigo-800">Siap Mengundi</span>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-2 text-xs">
+              <button id="tombol-kocok" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl shadow transition khusus-admin">🎉 Kocok Otomatis</button>
+              <button onclick="bukaModalInputManualLot()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-xl shadow transition khusus-admin">✍️ Input Lot Manual</button>
+              <button id="tombol-reset" class="bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold px-3 py-2 rounded-xl border border-rose-200 khusus-admin">Reset Siklus Ini</button>
+            </div>
+          </div>
+
+          <!-- Format Laporan WA -->
+          <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-2">
+            <div class="flex justify-between items-center">
+              <h2 class="font-bold text-xs sm:text-sm text-slate-900">Format Laporan Lot ke Grup WA</h2>
+              <button id="tombol-salin-wa" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold px-3 py-1 rounded-lg">📋 Salin Pesan WA</button>
+            </div>
+            <textarea id="area-laporan-wa" rows="6" class="w-full bg-slate-50 border rounded-lg p-2 text-xs font-mono outline-none" placeholder="Pesan hasil undian akan muncul di sini..."></textarea>
+          </div>
+
+          <!-- Riwayat Lot -->
+          <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200">
+            <div class="flex justify-between items-center mb-2">
+              <h2 id="judul-tabel-riwayat" class="font-bold text-xs sm:text-sm text-slate-900">Riwayat Penerima Lot</h2>
+              <button onclick="bukaModalInputManualLot()" class="text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-0.5 rounded border border-amber-200 khusus-admin">+ Tambah Lot Lalu</button>
+            </div>
+            <div class="overflow-x-auto max-h-48">
+              <table class="w-full text-left text-xs whitespace-nowrap">
+                <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] sticky top-0">
+                  <tr>
+                    <th class="p-2">Lot</th>
+                    <th class="p-2">Penerima</th>
+                    <th class="p-2 text-right">Konsumsi</th>
+                    <th class="p-2">Tanggal</th>
+                    <th class="p-2 text-center khusus-admin">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="tabel-riwayat" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ================= TAB 2: CHECKLIST SETORAN (MULTI-BULAN) ================= -->
+    <div id="halaman-setoran" class="hidden space-y-3.5">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+        <div class="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl">
+          <span class="text-slate-500 font-semibold block">Total Uang Masuk</span>
+          <p id="stat-total-masuk" class="text-base font-black text-emerald-700 mt-0.5">Rp 0</p>
+          <span id="stat-status-lunas" class="text-[10px] text-emerald-600">0 lunas</span>
+        </div>
+        <div class="bg-indigo-50 border border-indigo-200 p-2.5 rounded-xl">
+          <span class="text-slate-500 font-semibold block">Kas Arisan (80rb)</span>
+          <p id="stat-kas-arisan" class="text-base font-black text-indigo-700 mt-0.5">Rp 0</p>
+          <span id="stat-per-pemenang" class="text-[10px] text-indigo-600">Hak pemenang</span>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 p-2.5 rounded-xl">
+          <span class="text-slate-500 font-semibold block">Konsumsi (10rb)</span>
+          <p id="stat-kas-konsumsi" class="text-base font-black text-amber-700 mt-0.5">Rp 0</p>
+          <span class="text-[10px] text-amber-600">Tuan rumah berikutnya</span>
+        </div>
+        <div class="bg-teal-50 border border-teal-200 p-2.5 rounded-xl">
+          <span class="text-slate-500 font-semibold block">Jimpitan (10rb)</span>
+          <p id="stat-kas-jimpitan" class="text-base font-black text-teal-700 mt-0.5">Rp 0</p>
+          <span class="text-[10px] text-teal-600">Masuk kas keluarga</span>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-2">
+        <div class="flex flex-wrap justify-between items-center gap-2">
+          <div>
+            <h2 class="font-bold text-sm text-slate-900">Checklist Pembayaran Anggota</h2>
+            <p class="text-[11px] text-slate-400">Pantauan pembayaran arisan tiap anggota per siklus.</p>
+          </div>
+          <div class="flex gap-1.5 text-xs khusus-admin">
+            <button id="btn-semua-lunas" class="bg-slate-100 hover:bg-slate-200 font-semibold px-2.5 py-1 rounded border">Semua Lunas</button>
+            <button id="btn-reset-setoran" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1 rounded shadow-xs">Buka Bulan Baru</button>
+          </div>
+        </div>
+        <div id="grid-setoran-anggota" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5 max-h-80 overflow-y-auto p-1"></div>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-2">
+        <div class="flex justify-between items-center">
+          <h2 class="font-bold text-xs sm:text-sm text-slate-900">Format Rekapitulasi Iuran ke WA</h2>
+          <button id="tombol-salin-rekap-wa" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold px-3 py-1 rounded-lg">📋 Salin Rekap Setoran</button>
+        </div>
+        <textarea id="area-rekap-setoran-wa" rows="8" class="w-full bg-slate-50 border rounded-lg p-2 text-xs font-mono outline-none"></textarea>
+      </div>
+    </div>
+
+    <!-- ================= TAB 3: BUKU KAS, TABUNGAN & PINJAMAN JIMPITAN ================= -->
+    <div id="halaman-jimpitan" class="hidden space-y-3.5">
+      
+      <!-- Kartu Ringkasan Keuangan Global -->
+      <div id="grid-kartu-utama" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div class="bg-gradient-to-br from-teal-700 to-teal-900 text-white p-3.5 rounded-xl shadow">
+          <span id="label-kartu-kas-jimpitan" class="text-[10px] text-teal-200 font-bold uppercase block">Saldo Kas Jimpitan</span>
+          <p id="saldo-akhir-jimpitan" class="text-xl sm:text-2xl font-black mt-0.5">Rp 0</p>
+          <p id="ket-kartu-kas-jimpitan" class="text-[10px] text-teal-100 mt-1">Total sisa saldo kas jimpitan.</p>
+        </div>
+        <div class="bg-gradient-to-br from-purple-700 to-indigo-900 text-white p-3.5 rounded-xl shadow hanya-untuk-admin">
+          <span class="text-[10px] text-purple-200 font-bold uppercase block">Kas Operasional (Admin 5%)</span>
+          <p id="saldo-kas-operasional" class="text-xl sm:text-2xl font-black mt-0.5">Rp 0</p>
+          <p class="text-[10px] text-purple-100 mt-1">Uang admin bank, kertas, dll.</p>
+        </div>
+        <div class="bg-gradient-to-br from-amber-600 to-amber-800 text-white p-3.5 rounded-xl shadow">
+          <span class="text-[10px] text-amber-200 font-bold uppercase block">Piutang Pinjaman Berjalan</span>
+          <p id="saldo-piutang-jimpitan" class="text-xl sm:text-2xl font-black mt-0.5">Rp 0</p>
+          <p id="label-jumlah-peminjam-aktif" class="text-[10px] text-amber-100 mt-1">0 anggota meminjam.</p>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col justify-center text-xs space-y-1.5 col-span-full">
+          <div class="flex justify-between"><span class="text-slate-500">Simpanan Bersih:</span><strong id="label-total-tabungan-anggota" class="text-slate-800">Rp 0</strong></div>
+          <div class="flex justify-between pt-1.5 border-t border-slate-100"><span class="text-slate-500">Pengeluaran Sosial:</span><strong id="label-total-pengeluaran" class="text-rose-600">- Rp 0</strong></div>
+          <div class="flex justify-between pt-1.5 border-t border-slate-100 hanya-untuk-admin"><span class="text-slate-700 font-bold">Total Kekayaan:</span><strong id="label-total-aset-kas" class="text-indigo-700 font-black">Rp 0</strong></div>
+        </div>
+      </div>
+
+      <!-- Laporan Keuangan Individu -->
+      <div class="bg-indigo-50/70 border border-indigo-200 p-3.5 rounded-xl space-y-2.5">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 border-b border-indigo-100 pb-2">
+          <div>
+            <h2 class="font-bold text-xs sm:text-sm text-indigo-950">👤 Cek Laporan Keuangan Individu (Kirim WA Anggota)</h2>
+            <p class="text-[11px] text-indigo-700">Pilih nama anggota untuk membuat slip laporan rincian jimpitan, pinjaman & status iuran.</p>
+          </div>
+          <select id="filter-laporan-individu" onchange="tampilkanLaporanIndividu(this.value)" class="w-full sm:w-56 px-2.5 py-1 text-xs font-bold bg-white border border-indigo-300 rounded-lg outline-none text-indigo-900"></select>
+        </div>
+
+        <div id="box-detail-individu" class="hidden space-y-2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <div class="bg-white p-2.5 rounded-lg border border-teal-200 shadow-sm">
+              <span class="text-[10px] text-teal-700 font-bold block">Total Tabungan Jimpitan</span>
+              <p id="ind-total-kotor" class="text-base font-black text-teal-800 mt-0.5">Rp 0</p>
+              <span id="ind-rincian-periode" class="text-[9px] text-slate-400 block truncate mt-0.5">P1, P2, P3, P4</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-lg border border-rose-200 shadow-sm">
+              <span class="text-[10px] text-rose-700 font-bold block" id="label-ind-sisa-pinjaman">Sisa Hutang (Pokok + Admin)</span>
+              <p id="ind-sisa-pinjaman" class="text-base font-black text-rose-700 mt-0.5">Rp 0</p>
+              <span id="ind-status-pinjaman" class="text-[9px] text-slate-400 block mt-0.5">Status</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-lg border border-amber-200 shadow-sm">
+              <span class="text-[10px] text-amber-700 font-bold block">Potongan Kas Jimpitan</span>
+              <p id="ind-potongan" class="text-base font-black text-amber-800 mt-0.5">Rp 0</p>
+              <span id="ind-ket-potongan" class="text-[9px] text-slate-400 block mt-0.5">Sosial & Penarikan</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-lg border border-indigo-200 shadow-sm">
+              <span class="text-[10px] text-indigo-700 font-bold block">Hak Saldo Bersih</span>
+              <p id="ind-saldo-bersih" class="text-base font-black text-indigo-900 mt-0.5">Rp 0</p>
+              <span class="text-[9px] text-slate-400 block mt-0.5">Total - Hutang - Potongan</span>
+            </div>
+          </div>
+          <div class="bg-white p-2.5 rounded-lg border space-y-1.5 shadow-sm mt-1">
+            <div class="flex justify-between items-center">
+              <span class="text-[11px] font-bold text-slate-700">Teks WhatsApp Siap Kirim:</span>
+              <button onclick="salinPesanIndividuWA()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow-xs">📋 Salin Pesan WA Pribadi</button>
+            </div>
+            <textarea id="teks-wa-individu" rows="7" class="w-full bg-slate-50 border rounded p-2 text-xs font-mono outline-none" readonly></textarea>
+          </div>
+        </div>
+        <div id="box-placeholder-individu" class="py-3 text-center text-xs text-indigo-600 bg-white/70 rounded-lg border border-dashed border-indigo-200">
+          👆 Pilih nama anggota di atas untuk memunculkan rincian saldo individu.
+        </div>
+      </div>
+
+      <!-- Peminjaman Kas Jimpitan -->
+      <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-3">
+        <div class="flex justify-between items-center border-b pb-2">
+          <div>
+            <h2 class="font-bold text-xs sm:text-sm text-slate-900">🤝 Daftar Peminjam Kas Jimpitan</h2>
+            <p class="text-[11px] text-slate-400">Peminjam dikenakan tarif admin 5% khusus dialokasikan ke kas operasional.</p>
+          </div>
+          <button id="tombol-salin-pinjaman-wa" class="text-[11px] bg-amber-600 hover:bg-amber-700 text-white font-semibold px-2.5 py-1 rounded shadow-xs">📋 Salin Rekap Pinjaman</button>
+        </div>
+
+        <!-- FORM PINJAMAN BARU (KHUSUS ADMIN) -->
+        <form id="form-pinjaman-baru" onsubmit="simpanPinjamanBaru(event)" class="bg-amber-50/60 border border-amber-200 p-2.5 rounded-lg space-y-2 text-xs khusus-admin">
+          <span class="font-bold text-amber-900 block">Input Pinjaman Baru:</span>
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <select id="input-pinjam-anggota" class="px-2 py-1 border rounded bg-white font-medium" required></select>
+            <input type="date" id="input-pinjam-tanggal" class="px-2 py-1 border rounded bg-white font-semibold" required>
+            <input type="number" id="input-pinjam-nominal" placeholder="Pokok Pinjam (Rp)..." oninput="updatePreviewAdminPinjam()" required step="any" min="1000" class="px-2 py-1 border rounded bg-white font-bold">
+            <input type="text" id="input-pinjam-keperluan" placeholder="Alasan Pinjam..." required class="px-2 py-1 border rounded bg-white">
+          </div>
+          <div class="flex flex-wrap justify-between items-center pt-1 border-t border-amber-200 text-[11px]">
+            <span id="preview-admin-info" class="font-bold text-amber-950">Biaya Admin (5%): Rp 0 • Total Wajib Dikembalikan: Rp 0</span>
+            <button type="submit" class="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-3 py-1 rounded shadow-xs">+ Simpan Pinjaman</button>
+          </div>
+        </form>
+
+        <div class="overflow-x-auto max-h-48 border rounded-lg">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="bg-slate-100 text-slate-700 uppercase text-[10px] sticky top-0 border-b">
+              <tr>
+                <th class="p-2">Tgl</th>
+                <th class="p-2">Peminjam</th>
+                <th class="p-2 text-right">Pokok</th>
+                <th class="p-2 text-right text-purple-700 khusus-admin">Admin 5%</th>
+                <th class="p-2 text-right text-indigo-950 khusus-admin">Total Wajib</th>
+                <th class="p-2 text-right text-emerald-700">Diangsur</th>
+                <th class="p-2 text-right text-rose-700">Sisa</th>
+                <th class="p-2 text-center">Status</th>
+                <th class="p-2 text-center khusus-admin">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="body-tabel-pinjaman" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- KAS OPERASIONAL -->
+      <div class="bg-white p-4 rounded-xl shadow-xs border border-purple-200 space-y-2.5 hanya-untuk-admin">
+        <div class="flex justify-between items-center border-b pb-1.5">
+          <div>
+            <h2 class="font-bold text-xs sm:text-sm text-purple-950">💼 Catat Pengeluaran Kas Operasional (Dari Uang Admin 5%)</h2>
+            <p class="text-[11px] text-slate-400">Gunakan untuk biaya admin bank, biaya transfer, beli kertas, fotokopi, konsumsi rapat, dll.</p>
+          </div>
+          <span class="text-xs bg-purple-100 text-purple-900 font-bold px-2 py-0.5 rounded-full" id="badge-saldo-operasional">Kas Operasional: Rp 0</span>
+        </div>
+
+        <form id="form-pengeluaran-operasional" onsubmit="simpanPengeluaranOperasional(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+          <input type="date" id="input-ops-tanggal" class="px-2.5 py-1 border rounded font-semibold" required>
+          <input type="text" id="input-ops-tujuan" placeholder="Keperluan (Admin Bank / Kertas / dll)..." required class="sm:col-span-2 px-2.5 py-1 border rounded">
+          <div class="flex gap-1.5">
+            <input type="number" id="input-ops-nominal" placeholder="Nominal (Rp)..." required step="any" min="1000" class="w-full px-2.5 py-1 border rounded font-bold">
+            <button type="submit" class="bg-purple-800 hover:bg-purple-900 text-white font-semibold px-3 py-1 rounded shadow-xs shrink-0">Simpan</button>
+          </div>
+        </form>
+
+        <div class="overflow-x-auto max-h-36 border rounded-lg">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="bg-purple-50 text-purple-900 uppercase text-[10px] sticky top-0">
+              <tr>
+                <th class="p-2">Tgl</th>
+                <th class="p-2">Keperluan Operasional</th>
+                <th class="p-2 text-right">Nominal Keluar</th>
+                <th class="p-2 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tabel-pengeluaran-operasional" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pengaturan Riwayat Periode (KHUSUS ADMIN) -->
+      <div class="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-2 khusus-admin">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xs font-bold uppercase text-slate-600">⚙️ Pengaturan Riwayat Periode (Jumlah Lot & Standar)</h3>
+          <button onclick="tambahPeriodeBaru()" class="text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-2.5 py-1 rounded shadow-xs">+ Tambah Periode</button>
+        </div>
+        <div id="container-setting-periode" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs"></div>
+      </div>
+
+      <!-- Tabel Tabungan Jimpitan & Keaktifan -->
+      <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-2.5">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="font-bold text-xs sm:text-sm text-slate-900">Buku Tabungan Jimpitan & Keaktifan Anggota</h2>
+            <p class="text-[11px] text-slate-400">Rincian akumulasi simpanan jimpitan anggota di setiap periode.</p>
+          </div>
+          <button id="tombol-salin-tabungan-wa" class="text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1 rounded shadow-xs">📋 Salin Rekap Tabungan</button>
+        </div>
+
+        <div class="flex items-center gap-1 overflow-x-auto pb-1 text-xs border-y border-slate-100 pt-1">
+          <span class="text-slate-500 font-bold shrink-0 mr-1">🔍 Filter:</span>
+          <div id="baris-filter-periode" class="flex items-center gap-1 shrink-0"></div>
+        </div>
+
+        <div class="overflow-x-auto max-h-[420px] border rounded-lg">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="bg-slate-100 text-slate-700 uppercase text-[10px] sticky top-0 border-b">
+              <tr id="header-tabel-jimpitan"></tr>
+            </thead>
+            <tbody id="body-tabel-jimpitan" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Catat Pengeluaran Kas Jimpitan -->
+      <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 space-y-2.5">
+        <h2 class="font-bold text-xs sm:text-sm text-slate-900">Catat Pengeluaran Kas Jimpitan</h2>
+        <form id="form-pengeluaran-jimpitan" onsubmit="simpanPengeluaranSosial(event)" class="space-y-2 text-xs khusus-admin">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <input type="date" id="input-pengeluaran-tanggal" class="px-2.5 py-1 border rounded font-semibold" required>
+            <input type="text" id="input-tujuan-pengeluaran" placeholder="Keperluan pengeluaran kas..." required class="sm:col-span-2 px-2.5 py-1 border rounded">
+            <input type="number" id="input-nominal-pengeluaran" placeholder="Total Keluar (Rp)..." required step="any" min="1000" oninput="hitungPreviewBebanPengeluaran()" class="px-2.5 py-1 border rounded font-bold">
+          </div>
+          <div class="bg-teal-50/50 border border-teal-200 p-2.5 rounded-lg space-y-1.5">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-teal-900">Pilih Anggota yang Menanggung Biaya:</span>
+              <div class="flex gap-1 text-[10px]">
+                <button type="button" onclick="pilihSemuaPartisipanBaru(true)" class="bg-white border border-teal-300 text-teal-800 font-semibold px-2 py-0.5 rounded">Pilih Semua</button>
+                <button type="button" onclick="pilihSemuaPartisipanBaru(false)" class="bg-white border text-slate-600 font-semibold px-2 py-0.5 rounded">Batal Semua</button>
+              </div>
+            </div>
+            <div id="grid-partisipan-pengeluaran-baru" class="grid grid-cols-2 sm:grid-cols-4 gap-1 max-h-32 overflow-y-auto p-1 bg-white border rounded text-[10px]"></div>
+            <div class="flex justify-between items-center pt-1 border-t border-teal-100">
+              <span id="preview-beban-pengeluaran" class="font-bold text-teal-900">0 anggota terpilih • Rp 0 / org</span>
+              <button type="submit" class="bg-teal-700 hover:bg-teal-800 text-white font-semibold px-4 py-1 rounded shadow-xs">Simpan Pengeluaran</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="overflow-x-auto max-h-44 border rounded-lg">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] sticky top-0">
+              <tr>
+                <th class="p-2">Tgl</th>
+                <th class="p-2">Keperluan</th>
+                <th class="p-2 text-right">Total</th>
+                <th class="p-2 text-center">Partisipan (Klik Nama)</th>
+                <th class="p-2 text-center khusus-admin">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tabel-pengeluaran-jimpitan" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="mt-6 py-3 border-t border-slate-200 text-center text-xs text-slate-400">
+    <p>© 2026 Arisan Keluarga Besar EmbuGari • Dibuat oleh <strong class="text-indigo-800">Irwan</strong></p>
+  </footer>
+
+  <!-- ================= MODAL LOGIN PIN ADMIN ================= -->
+  <div id="modal-pin-admin" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-5 max-w-xs w-full shadow-2xl space-y-3 text-xs text-center">
+      <div class="w-12 h-12 bg-amber-100 text-amber-800 rounded-full flex items-center justify-center mx-auto text-2xl font-black shadow-inner">🔐</div>
+      <div>
+        <h3 class="font-bold text-sm text-slate-900">Akses Khusus Pengurus</h3>
+        <p class="text-[11px] text-slate-500 mt-0.5">Masukkan PIN untuk mengaktifkan fitur pencatatan, pengundian, dan perubahan data.</p>
+      </div>
+      <form onsubmit="verifikasiPinAdmin(event)" class="space-y-3">
+        <input type="password" id="input-pin-admin" inputmode="numeric" maxlength="8" placeholder="Masukkan PIN..." class="w-full px-3 py-2 border rounded-xl text-center text-lg tracking-widest font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500" required>
+        <p id="pesan-error-pin" class="text-[10px] text-rose-600 font-semibold hidden">PIN salah! Silakan coba lagi.</p>
+        <div class="flex gap-2">
+          <button type="button" onclick="tutupModalLoginAdmin()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl">Batal</button>
+          <button type="submit" class="flex-1 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl shadow-xs">Buka Kunci</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL GANTI PIN ADMIN ================= -->
+  <div id="modal-ganti-pin" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-3 text-xs">
+      <div class="flex justify-between items-center border-b pb-1.5">
+        <h3 class="font-bold text-purple-900">🔑 Ubah PIN Pengurus</h3>
+        <button onclick="tutupModalGantiPin()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <form onsubmit="simpanPinBaru(event)" class="space-y-2">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-0.5">PIN Lama:</label>
+          <input type="password" id="input-pin-lama" inputmode="numeric" maxlength="8" required class="w-full px-2.5 py-1.5 border rounded-lg text-center font-bold tracking-widest outline-none">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-0.5">PIN Baru (min. 4 angka):</label>
+          <input type="password" id="input-pin-baru" inputmode="numeric" maxlength="8" required class="w-full px-2.5 py-1.5 border rounded-lg text-center font-bold tracking-widest outline-none">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-0.5">Konfirmasi PIN Baru:</label>
+          <input type="password" id="input-pin-konfirmasi" inputmode="numeric" maxlength="8" required class="w-full px-2.5 py-1.5 border rounded-lg text-center font-bold tracking-widest outline-none">
+        </div>
+        <p id="pesan-error-ganti-pin" class="text-[10px] text-rose-600 font-semibold hidden"></p>
+        <div class="pt-2 border-t flex justify-end gap-1.5">
+          <button type="button" onclick="tutupModalGantiPin()" class="px-2.5 py-1 text-slate-600 hover:bg-slate-100 rounded">Batal</button>
+          <button type="submit" class="px-3.5 py-1 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded shadow-xs">Simpan PIN</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL LIHAT PARTISIPAN ================= -->
+  <div id="modal-lihat-partisipan" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-sm w-full shadow-2xl space-y-2.5 text-xs max-h-[85vh] flex flex-col">
+      <div class="flex justify-between items-center border-b pb-1.5">
+        <div class="pr-2">
+          <h3 id="modal-partisipan-judul" class="font-bold text-slate-900 text-sm truncate">Daftar Partisipan</h3>
+          <p id="modal-partisipan-sub" class="text-[10px] text-teal-700 font-semibold"></p>
+        </div>
+        <button onclick="tutupModalLihatPartisipan()" class="text-slate-400 hover:text-slate-600 font-bold text-xl leading-none">×</button>
+      </div>
+      <div id="modal-partisipan-info" class="bg-teal-50/70 p-2.5 rounded-lg border border-teal-200 text-[11px] space-y-0.5"></div>
+      <div class="overflow-y-auto flex-1 max-h-56 border rounded-lg p-2 bg-slate-50">
+        <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Anggota yang menanggung:</span>
+        <ol id="modal-partisipan-list" class="space-y-1 list-decimal list-inside text-slate-700 text-xs"></ol>
+      </div>
+      <div class="pt-1.5 border-t flex justify-end">
+        <button type="button" onclick="tutupModalLihatPartisipan()" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-lg shadow-xs">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Bayar & Edit Multi-Bulan di Muka -->
+  <div id="modal-bayar-multibulan" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-3 text-xs">
+      <div class="flex justify-between items-center border-b pb-1.5">
+        <h3 class="font-bold text-indigo-900" id="modal-multi-judul">Atur Pembayaran di Muka</h3>
+        <button onclick="tutupModalMultiBulan()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <p>Anggota: <strong id="modal-multi-nama" class="text-indigo-950 font-bold"></strong></p>
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1">Total Bulan yang Dibayar:</label>
+        <div class="flex items-center gap-1.5">
+          <input type="number" id="modal-multi-jumlah-bulan" value="1" min="1" max="24" oninput="updatePreviewMultiBulan()" class="flex-1 px-2.5 py-1.5 border rounded-lg font-bold text-indigo-900 outline-none text-center">
+          <span class="font-bold text-slate-600">Bulan</span>
+        </div>
+      </div>
+      <div class="bg-indigo-50 p-2.5 rounded-lg border border-indigo-200 space-y-1 text-[11px]">
+        <div class="flex justify-between"><span>Tarif per bulan:</span> <strong>Rp 100.000</strong></div>
+        <div class="flex justify-between text-indigo-900 font-bold border-t pt-1"><span>Total Setoran:</span> <strong id="modal-multi-total-bayar">Rp 100.000</strong></div>
+        <div class="border-t pt-1 space-y-0.5 text-[10px] text-slate-600">
+          <p>• Bulan ini: <strong class="text-emerald-700">LUNAS (1 Bulan)</strong></p>
+          <p>• Cadangan ke depan: <strong class="text-indigo-800" id="modal-multi-cadangan-teks">+0 Bulan ke Depan</strong></p>
+        </div>
+      </div>
+      <div class="pt-2 border-t flex flex-wrap justify-between items-center gap-1.5">
+        <button type="button" onclick="resetMultiBulan()" class="text-[10px] text-rose-600 hover:text-rose-800 font-semibold underline">Hapus Titipan (1 Bln Biasa)</button>
+        <div class="flex gap-1.5">
+          <button type="button" onclick="tutupModalMultiBulan()" class="px-2.5 py-1 text-slate-600 hover:bg-slate-100 rounded">Batal</button>
+          <button type="button" onclick="simpanMultiBulan()" class="px-3.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded shadow-xs">Simpan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Manual Lot -->
+  <div id="modal-input-lot-manual" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-sm w-full shadow-2xl space-y-3 max-h-[90vh] overflow-y-auto text-xs">
+      <div class="flex justify-between items-center border-b pb-1.5">
+        <h3 id="judul-modal-manual-lot" class="font-bold text-amber-900">✍️ Input Penerima Lot Manual</h3>
+        <button onclick="tutupModalInputManualLot()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <form onsubmit="simpanManualLot(event)" class="space-y-2.5">
+        <input type="hidden" id="manual-lot-edit-id" value="">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="font-bold text-slate-700 block mb-0.5">Nomor Lot:</label>
+            <input type="number" id="manual-lot-nomor" min="1" required class="w-full px-2 py-1 border rounded font-bold text-indigo-900 outline-none">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-0.5">Pemenang:</label>
+            <select id="manual-lot-jumlah" onchange="sesuaikanFieldPemenangManual(this.value)" class="w-full px-1.5 py-1 border rounded bg-white font-semibold">
+              <option value="2" selected>2 Orang (Standar)</option>
+              <option value="3">3 Orang (Khusus)</option>
+              <option value="1">1 Orang</option>
+              <option value="4">4 Orang</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-0.5">Tanggal Pengundian:</label>
+          <input type="date" id="manual-lot-tanggal" required class="w-full px-2 py-1 border rounded font-semibold">
+        </div>
+        <div class="space-y-1.5 bg-amber-50/60 border border-amber-200 p-2 rounded-lg">
+          <div><label class="text-[10px] text-slate-600 block">Penerima 1:</label><select id="manual-pemenang-1" required class="w-full px-2 py-1 border rounded bg-white font-semibold"></select></div>
+          <div id="wadah-manual-pemenang-2"><label class="text-[10px] text-slate-600 block">Penerima 2:</label><select id="manual-pemenang-2" class="w-full px-2 py-1 border rounded bg-white font-semibold"></select></div>
+          <div id="wadah-manual-pemenang-3" class="hidden"><label class="text-[10px] text-slate-600 block">Penerima 3:</label><select id="manual-pemenang-3" class="w-full px-2 py-1 border rounded bg-white font-semibold"></select></div>
+          <div id="wadah-manual-pemenang-4" class="hidden"><label class="text-[10px] text-slate-600 block">Penerima 4:</label><select id="manual-pemenang-4" class="w-full px-2 py-1 border rounded bg-white font-semibold"></select></div>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-0.5">Tuan Rumah:</label>
+          <select id="manual-lot-tuan-rumah" class="w-full px-2 py-1 border rounded bg-white font-medium"></select>
+        </div>
+        <div class="pt-2 border-t flex justify-end gap-1.5">
+          <button type="button" onclick="tutupModalInputManualLot()" class="px-3 py-1 text-slate-600 rounded">Batal</button>
+          <button type="submit" class="px-3.5 py-1 bg-amber-700 text-white font-bold rounded shadow-xs">Simpan Lot</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Backup Teks & JSON -->
+  <div id="modal-backup-teks" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-md w-full shadow-2xl space-y-3 text-xs">
+      <div class="flex justify-between items-center border-b pb-1.5">
+        <h3 class="font-bold text-emerald-800">📥 Cadangkan Data Arisan</h3>
+        <button onclick="tutupModalBackup()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <p class="text-slate-500">Salin kode teks di bawah ini dan tempelkan langsung ke chat WhatsApp Anda:</p>
+      <textarea id="area-teks-backup" rows="6" class="w-full bg-slate-50 border rounded-lg p-2 font-mono text-[10px] select-all outline-none" readonly></textarea>
+      <div class="flex justify-between items-center pt-1 border-t">
+        <button onclick="cadangkanFileJSONLangsung()" class="text-slate-400 hover:text-slate-600 underline text-[10px]">Unduh file .json</button>
+        <button onclick="salinTeksBackupKeClipboard()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded shadow-xs">📋 Salin Teks Cadangan (WA)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Impor Teks & JSON -->
+  <div id="modal-impor-teks" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-md w-full shadow-2xl space-y-3 text-xs">
+      <div class="flex justify-between items-center border-b pb-1.5">
+        <h3 class="font-bold text-amber-800">📤 Pulihkan Data Arisan</h3>
+        <button onclick="tutupModalImpor()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <p class="text-slate-500">Tempelkan (paste) kode teks cadangan dari WhatsApp ke kotak di bawah ini:</p>
+      <textarea id="area-teks-impor" rows="6" placeholder="Tempelkan kode teks cadangan di sini..." class="w-full bg-slate-50 border rounded-lg p-2 font-mono text-[10px] outline-none"></textarea>
+      <div class="flex justify-between items-center pt-1 border-t">
+        <div>
+          <button type="button" onclick="document.getElementById('input-file-backup-hidden').click()" class="text-slate-400 hover:text-slate-600 underline text-[10px]">Pilih file .json</button>
+          <input type="file" id="input-file-backup-hidden" accept=".json" onchange="pulihkanDariFile(event)" class="hidden">
+        </div>
+        <button onclick="pulihkanDariTeks()" class="px-3.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded shadow-xs">Pulihkan dari Teks</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Edit Pinjaman -->
+  <div id="modal-edit-pinjaman" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-2.5 text-xs">
+      <div class="flex justify-between items-center border-b pb-1">
+        <h3 class="font-bold text-amber-900">Edit Data Pinjaman</h3>
+        <button onclick="tutupModalEditPinjaman()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <div class="space-y-1.5">
+        <div><label class="block mb-0.5 text-slate-600 font-semibold">Peminjam:</label><select id="modal-edit-pinjam-anggota" class="w-full px-2 py-1 border rounded bg-white font-medium"></select></div>
+        <div><label class="block mb-0.5 text-slate-600 font-semibold">Tgl Pinjam:</label><input type="date" id="modal-edit-pinjam-tanggal" class="w-full px-2 py-1 border rounded font-semibold"></div>
+        <div><label class="block mb-0.5 text-slate-600 font-semibold">Pokok Pinjaman (Rp):</label><input type="number" id="modal-edit-pinjam-nominal" step="any" min="1000" class="w-full px-2 py-1 border rounded font-bold"></div>
+        <div><label class="block mb-0.5 text-slate-600 font-semibold">Keperluan:</label><input type="text" id="modal-edit-pinjam-keperluan" class="w-full px-2 py-1 border rounded"></div>
+      </div>
+      <div class="pt-1.5 border-t flex justify-end gap-1.5">
+        <button onclick="tutupModalEditPinjaman()" class="px-2.5 py-1 text-slate-600 rounded">Batal</button>
+        <button onclick="simpanModalEditPinjaman()" class="px-3 py-1 bg-amber-700 text-white font-bold rounded shadow-xs">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Bayar Angsuran -->
+  <div id="modal-bayar-angsuran" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-sm w-full shadow-2xl space-y-2.5 text-xs">
+      <div class="flex justify-between items-center border-b pb-1">
+        <h3 class="font-bold text-emerald-800">Catat Pengembalian Angsuran</h3>
+        <button onclick="tutupModalBayarAngsuran()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <div class="bg-slate-50 p-2 rounded border space-y-0.5">
+        <p><span class="text-slate-500">Peminjam:</span> <strong id="modal-bayar-nama"></strong></p>
+        <p><span class="text-slate-500">Total Sisa Tagihan:</span> <strong id="modal-bayar-sisa" class="text-rose-700"></strong></p>
+        <div class="text-[10px] text-slate-500 mt-1 flex justify-between border-t pt-1">
+          <span>Sisa Pokok: <strong id="modal-bayar-sisa-pokok" class="text-slate-700"></strong></span>
+          <span>Sisa Admin: <strong id="modal-bayar-sisa-admin" class="text-purple-700"></strong></span>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div><label class="block mb-0.5 text-slate-600 font-semibold">Tanggal Setor:</label><input type="date" id="modal-bayar-tanggal" class="w-full px-2 py-1 border rounded font-semibold" required></div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block mb-0.5 text-slate-600 font-semibold">Bayar Pokok (Rp):</label><input type="number" id="modal-bayar-pokok" class="w-full px-2 py-1 border rounded font-bold" step="any" min="0" required></div>
+          <div><label class="block mb-0.5 text-slate-600 font-semibold text-purple-700">Bayar Admin 5% (Rp):</label><input type="number" id="modal-bayar-admin" class="w-full px-2 py-1 border rounded font-bold text-purple-700" step="any" min="0" required></div>
+        </div>
+        <div><label class="block mb-0.5 text-slate-600 font-semibold">Keterangan:</label><input type="text" id="modal-bayar-catatan" class="w-full px-2 py-1 border rounded"></div>
+      </div>
+      <div class="pt-1.5 border-t flex justify-end gap-1.5">
+        <button onclick="tutupModalBayarAngsuran()" class="px-2.5 py-1 text-slate-600 rounded">Batal</button>
+        <button onclick="simpanModalBayarAngsuran()" class="px-3 py-1 bg-emerald-600 text-white font-bold rounded shadow-xs">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Rincian Angsuran -->
+  <div id="modal-rincian-angsuran" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-md w-full shadow-2xl space-y-2.5 text-xs max-h-[85vh] flex flex-col">
+      <div class="flex justify-between items-center border-b pb-1">
+        <h3 id="modal-rincian-nama" class="font-bold text-slate-900">Rincian Angsuran</h3>
+        <button onclick="tutupModalRincianAngsuran()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <div id="modal-rincian-ringkasan" class="bg-slate-50 p-2 rounded border space-y-0.5"></div>
+      <div class="overflow-y-auto flex-1 max-h-48 border rounded">
+        <table class="w-full text-left text-xs whitespace-nowrap">
+          <thead class="bg-slate-100 text-[10px]">
+            <tr>
+              <th class="p-1.5">Tgl</th>
+              <th class="p-1.5 text-right">Pokok</th>
+              <th class="p-1.5 text-right text-purple-700 khusus-admin">Admin</th>
+              <th class="p-1.5 text-slate-600">Catatan</th>
+              <th class="p-1.5 text-center khusus-admin">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="modal-rincian-tbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <div class="pt-1.5 border-t flex justify-end"><button onclick="tutupModalRincianAngsuran()" class="px-3 py-1 bg-slate-700 text-white font-semibold rounded">Tutup</button></div>
+    </div>
+  </div>
+
+  <!-- Modal Edit Satuan Angsuran -->
+  <div id="modal-edit-satuan-angsuran" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-2 text-xs">
+      <div class="flex justify-between items-center border-b pb-1"><h4 class="font-bold text-slate-900">Koreksi Angsuran</h4><button onclick="tutupModalEditSatuanAngsuran()" class="text-slate-400 font-bold">×</button></div>
+      <div class="space-y-1.5">
+        <div><label class="block text-slate-600 font-semibold">Tgl Setor:</label><input type="date" id="modal-edit-angsuran-tanggal" class="w-full px-2 py-1 border rounded font-semibold"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block text-slate-600 font-semibold">Pokok (Rp):</label><input type="number" id="modal-edit-angsuran-pokok" step="any" min="0" class="w-full px-2 py-1 border rounded font-bold"></div>
+          <div><label class="block text-slate-600 font-semibold text-purple-700">Admin (Rp):</label><input type="number" id="modal-edit-angsuran-admin" step="any" min="0" class="w-full px-2 py-1 border rounded font-bold text-purple-700"></div>
+        </div>
+        <div><label class="block text-slate-600 font-semibold">Catatan:</label><input type="text" id="modal-edit-angsuran-catatan" class="w-full px-2 py-1 border rounded"></div>
+      </div>
+      <div class="pt-1 border-t flex justify-end gap-1.5"><button onclick="tutupModalEditSatuanAngsuran()" class="px-2.5 py-1 text-slate-600 rounded">Batal</button><button onclick="simpanModalEditSatuanAngsuran()" class="px-3 py-1 bg-emerald-600 text-white font-bold rounded">Simpan</button></div>
+    </div>
+  </div>
+
+  <!-- Modal Edit Pengeluaran Sosial -->
+  <div id="modal-edit-pengeluaran-sosial" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-sm w-full shadow-2xl space-y-2.5 text-xs max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-1"><h3 class="font-bold text-teal-900">Edit Pengeluaran Kas</h3><button onclick="tutupModalEditPengeluaranSosial()" class="text-slate-400 font-bold text-lg">×</button></div>
+      <div class="space-y-1.5">
+        <div><label class="font-semibold block text-slate-600">Tanggal:</label><input type="date" id="modal-edit-keluar-tanggal" class="w-full px-2 py-1 border rounded font-semibold" required></div>
+        <div><label class="font-semibold block text-slate-600">Keperluan:</label><input type="text" id="modal-edit-keluar-tujuan" class="w-full px-2 py-1 border rounded" required></div>
+        <div><label class="font-semibold block text-slate-600">Total Keluar (Rp):</label><input type="number" id="modal-edit-keluar-nominal" step="any" min="1000" oninput="hitungPreviewBebanEditPengeluaran()" class="w-full px-2 py-1 border rounded font-bold" required></div>
+        <div class="bg-teal-50/50 border border-teal-200 p-2 rounded space-y-1">
+          <div class="flex justify-between items-center"><span class="font-bold text-teal-900">Partisipan:</span><div class="flex gap-1 text-[9px]"><button type="button" onclick="pilihSemuaPartisipanEdit(true)" class="bg-white border px-1.5 py-0.5 rounded font-semibold">Semua</button><button type="button" onclick="pilihSemuaPartisipanEdit(false)" class="bg-white border px-1.5 py-0.5 rounded">Batal</button></div></div>
+          <div id="grid-partisipan-pengeluaran-edit" class="grid grid-cols-2 gap-1 max-h-28 overflow-y-auto p-1 bg-white border rounded text-[10px]"></div>
+          <p id="preview-beban-edit-pengeluaran" class="font-bold text-teal-900 text-[10px]">0 anggota</p>
+        </div>
+      </div>
+      <div class="pt-1.5 border-t flex justify-end gap-1.5"><button onclick="tutupModalEditPengeluaranSosial()" class="px-2.5 py-1 text-slate-600 rounded">Batal</button><button onclick="simpanModalEditPengeluaranSosial()" class="px-3 py-1 bg-teal-700 text-white font-bold rounded">Simpan</button></div>
+    </div>
+  </div>
+
+  <!-- Modal Edit Tabungan Jimpitan Anggota -->
+  <div id="modal-edit-jimpitan" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-2.5 text-xs max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-1">
+        <div><h3 class="font-bold text-slate-900">Edit Tabungan Jimpitan</h3><p id="modal-edit-nama-anggota" class="text-indigo-700 font-semibold text-[11px]"></p></div>
+        <button onclick="tutupModalEdit()" class="text-slate-400 font-bold text-lg">×</button>
+      </div>
+      <div id="modal-container-input-periode" class="space-y-1.5"></div>
+      <div class="pt-1.5 border-t flex justify-end gap-1.5"><button onclick="tutupModalEdit()" class="px-2.5 py-1 text-slate-600 rounded">Batal</button><button onclick="simpanModalEdit()" class="px-3 py-1 bg-indigo-700 text-white font-bold rounded">Simpan</button></div>
+    </div>
+  </div>
+
+  <!-- Modal Tarik Jimpitan -->
+  <div id="modal-tarik-jimpitan" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-2.5 text-xs">
+      <div class="flex justify-between items-center border-b pb-1"><h3 class="font-bold text-rose-700">Tarik Uang Jimpitan</h3><button onclick="tutupModalTarik()" class="text-slate-400 font-bold text-lg">×</button></div>
+      <div class="bg-slate-50 p-2 rounded border space-y-0.5">
+        <p><span class="text-slate-500">Anggota:</span> <strong id="modal-tarik-nama"></strong></p>
+        <p><span class="text-slate-500">Saldo:</span> <strong id="modal-tarik-saldo" class="text-teal-700"></strong></p>
+      </div>
+      <div class="space-y-1.5">
+        <div><label class="block text-slate-600 font-semibold">Nominal Ditarik (Rp):</label><input type="number" id="modal-tarik-nominal" class="w-full px-2 py-1 border rounded" step="any" min="1000"></div>
+        <div><label class="block text-slate-600 font-semibold">Alasan:</label><input type="text" id="modal-tarik-alasan" value="Keluar arisan / penarikan hak jimpitan" class="w-full px-2 py-1 border rounded"></div>
+      </div>
+      <div class="pt-1.5 border-t flex justify-end gap-1.5"><button onclick="tutupModalTarik()" class="px-2.5 py-1 text-slate-600 rounded">Batal</button><button onclick="simpanModalTarik()" class="px-3 py-1 bg-rose-600 text-white font-bold rounded">Konfirmasi</button></div>
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT LOGIC ================= -->
+  <script>
+    // ================= PENGATURAN KUNCI PIN ADMIN & MODAL =================
+    let PIN_ADMIN = localStorage.getItem('embugari_pin_admin') || "1234";
+    let isAdmin = sessionStorage.getItem('embugari_mode_admin') === 'true';
+
+    window.tanganiKlikTombolAdmin = function() {
+      if (isAdmin) {
+        if (confirm("Kunci kembali aplikasi ke Mode Anggota (Hanya Lihat)?")) {
+          keluarModeAdmin();
+        }
+      } else {
+        bukaModalLoginAdmin();
+      }
+    };
+
+    window.bukaModalLoginAdmin = function() {
+      const modal = document.getElementById('modal-pin-admin');
+      const input = document.getElementById('input-pin-admin');
+      const err = document.getElementById('pesan-error-pin');
+      if (err) err.classList.add('hidden');
+      if (input) input.value = '';
+      if (modal) modal.classList.remove('hidden');
+      setTimeout(() => { if (input) input.focus(); }, 150);
+    };
+
+    window.tutupModalLoginAdmin = function() {
+      const modal = document.getElementById('modal-pin-admin');
+      if (modal) modal.classList.add('hidden');
+    };
+
+    window.verifikasiPinAdmin = function(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('input-pin-admin');
+      const err = document.getElementById('pesan-error-pin');
+      if (input && input.value === PIN_ADMIN) {
+        isAdmin = true;
+        sessionStorage.setItem('embugari_mode_admin', 'true');
+        tutupModalLoginAdmin();
+        perbaruiStatusTampilanAdmin();
+        alert("🔓 Mode Pengurus Aktif! Anda sekarang dapat mencatat dan mengubah data arisan.");
+      } else {
+        if (err) err.classList.remove('hidden');
+        if (input) { input.value = ''; input.focus(); }
+      }
+    };
+
+    window.keluarModeAdmin = function() {
+      isAdmin = false;
+      sessionStorage.removeItem('embugari_mode_admin');
+      perbaruiStatusTampilanAdmin();
+      alert("🔒 Aplikasi terkunci ke Mode Anggota.");
+    };
+
+    // Modal Ubah PIN
+    window.bukaModalGantiPin = function() {
+      if (!cekHakAksesAdmin()) return;
+      document.getElementById('input-pin-lama').value = '';
+      document.getElementById('input-pin-baru').value = '';
+      document.getElementById('input-pin-konfirmasi').value = '';
+      const err = document.getElementById('pesan-error-ganti-pin');
+      if (err) err.classList.add('hidden');
+      document.getElementById('modal-ganti-pin').classList.remove('hidden');
+      setTimeout(() => document.getElementById('input-pin-lama').focus(), 150);
+    };
+
+    window.tutupModalGantiPin = function() {
+      document.getElementById('modal-ganti-pin').classList.add('hidden');
+    };
+
+    window.simpanPinBaru = function(e) {
+      e.preventDefault();
+      const lama = document.getElementById('input-pin-lama').value.trim();
+      const baru = document.getElementById('input-pin-baru').value.trim();
+      const konfirm = document.getElementById('input-pin-konfirmasi').value.trim();
+      const err = document.getElementById('pesan-error-ganti-pin');
+
+      if (lama !== PIN_ADMIN) {
+        err.textContent = "❌ PIN lama tidak sesuai!";
+        err.classList.remove('hidden');
+        return;
+      }
+      if (baru.length < 4) {
+        err.textContent = "❌ PIN baru minimal harus 4 angka!";
+        err.classList.remove('hidden');
+        return;
+      }
+      if (baru !== konfirm) {
+        err.textContent = "❌ Konfirmasi PIN baru tidak sama!";
+        err.classList.remove('hidden');
+        return;
+      }
+
+      PIN_ADMIN = baru;
+      localStorage.setItem('embugari_pin_admin', PIN_ADMIN);
+      if (db) {
+        db.collection('arisan').doc('data_utama').set({ pinAdmin: PIN_ADMIN }, { merge: true }).catch(console.error);
+      }
+
+      tutupModalGantiPin();
+      alert("✅ PIN Admin berhasil diperbarui menjadi: " + PIN_ADMIN);
+    };
+
+    function perbaruiStatusTampilanAdmin() {
+      const btn = document.getElementById('btn-mode-admin');
+      if (isAdmin) {
+        document.body.classList.remove('mode-tamu');
+        if (btn) {
+          btn.className = "inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-emerald-300 shadow-xs transition";
+          btn.innerHTML = "🔓 Pengurus Aktif (Klik utk Kunci)";
+        }
+      } else {
+        document.body.classList.add('mode-tamu');
+        if (btn) {
+          btn.className = "inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-amber-300 shadow-xs transition";
+          btn.innerHTML = "🔒 Mode Anggota (Buka Kunci PIN)";
+        }
+      }
+      renderTabAktif();
+    }
+
+    function cekHakAksesAdmin() {
+      if (!isAdmin) {
+        bukaModalLoginAdmin();
+        return false;
+      }
+      return true;
+    }
+
+    // ================= MODAL LIHAT PARTISIPAN =================
+    window.bukaModalLihatPartisipan = function(index) {
+      const p = pengeluaranJimpitan[index];
+      if (!p) return;
+      const partisipanIds = (p.partisipanIds && Array.isArray(p.partisipanIds)) ? p.partisipanIds : anggota.map(a => a.id || a.nama);
+      const bebanPerOrang = partisipanIds.length > 0 ? Math.round(p.nominal / partisipanIds.length) : 0;
+
+      document.getElementById('modal-partisipan-judul').textContent = p.tujuan;
+      document.getElementById('modal-partisipan-sub').textContent = konversiTanggalKeDisplay(p.tanggal);
+      document.getElementById('modal-partisipan-info').innerHTML = `
+        <div class="flex justify-between"><span>Total Pengeluaran:</span> <strong class="text-rose-600 font-black">- Rp ${formatRupiah(p.nominal)}</strong></div>
+        <div class="flex justify-between"><span>Beban per Anggota:</span> <strong class="text-teal-800 font-bold">Rp ${formatRupiah(bebanPerOrang)} / org</strong></div>
+        <div class="flex justify-between border-t border-teal-200/60 pt-0.5 mt-0.5"><span>Jumlah Penanggung:</span> <strong class="text-slate-800">${partisipanIds.length} orang</strong></div>
+      `;
+
+      const ol = document.getElementById('modal-partisipan-list');
+      ol.innerHTML = '';
+      const daftarNama = [];
+      partisipanIds.forEach(id => {
+        const agt = anggota.find(item => item.id === id || item.nama === id);
+        if (agt) daftarNama.push(agt.nama);
+        else daftarNama.push(id);
+      });
+
+      daftarNama.forEach((nama) => {
+        const li = document.createElement('li');
+        li.className = "py-0.5 px-1 rounded hover:bg-white truncate font-medium text-slate-800";
+        li.textContent = nama;
+        ol.appendChild(li);
+      });
+
+      document.getElementById('modal-lihat-partisipan').classList.remove('hidden');
+    };
+
+    window.tutupModalLihatPartisipan = function() {
+      document.getElementById('modal-lihat-partisipan').classList.add('hidden');
+    };
+
+    // ================= FIREBASE CONFIG =================
+    const firebaseConfig = {
+      apiKey: "AIzaSyBY023UaoSJujyliKEvJUxhtoM0SPWrzBc",
+      authDomain: "arisan-embugari-df6e7.firebaseapp.com",
+      projectId: "arisan-embugari-df6e7",
+      storageBucket: "arisan-embugari-df6e7.firebasestorage.app",
+      messagingSenderId: "642382674563",
+      appId: "1:642382674563:web:2fe92877ce1906bea579b6"
+    };
+
+    let db = null;
+    try {
+      if (typeof firebase !== 'undefined') {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+      }
+    } catch (e) {
+      console.error("Gagal menginisialisasi Firebase:", e);
+    }
+
+    const TARIF_ARISAN = 80000;
+    const TARIF_KONSUMSI = 10000;
+    const TARIF_JIMPITAN = 10000;
+    const TOTAL_IURAN = 100000;
+
+    const NAMA_ANGGOTA_AWAL = [
+      "Kel. La Kage", "Kel. Amruddin", "Kel. Abidin", "Kel. Maani",
+      "Kel. Muliadin 1", "Kel. Muliadin 2", "Kel. Sulaeman", "Kel. H. Hendri 1",
+      "Kel. H. Hendri 2", "Kel. H. Hendri 3", "Kel. H. Hendri 4", "Kel. H. Hendri 5",
+      "Kel. Arsudin", "Kel. Ridwan", "Kel. Baenudin", "Kel. Umar. K",
+      "Kel. Hasan Palabusa", "Kel. Hasan Arsila", "Kel. Dawir", "Kel. Sadam",
+      "Kel. Hendrayanto", "Kel. Ruslin", "Kel. Irwan", "Kel. Alibaba",
+      "Kel. Ilman", "Kel. Darmin", "Kel. Al Fajrin", "Serda Irul",
+      "Adik Faira", "Kel. Rudini", "Kel. Maharuddin", "Kel. Yabun"
+    ];
+
+    function ambilDataStorage(namaDasar, nilaiDefault) {
+      let data = localStorage.getItem(`embugari_${namaDasar}_v23`);
+      if (data !== null) { try { return JSON.parse(data); } catch(e){} }
+      for (let i = 22; i >= 1; i--) {
+        let d = localStorage.getItem(`embugari_${namaDasar}_v${i}`);
+        if (d !== null) { try { return JSON.parse(d); } catch(e){} }
+      }
+      return nilaiDefault;
+    }
+
+    const DEFAULT_CONFIG_PERIODE = [
+      { id: 1, nama: "Periode 1", penerimaPerLot: 1, totalLot: 27, standarNominal: 270000, jimpitanPerLot: 10000 },
+      { id: 2, nama: "Periode 2", penerimaPerLot: 2, totalLot: 14, standarNominal: 140000, jimpitanPerLot: 10000 },
+      { id: 3, nama: "Periode 3", penerimaPerLot: 2, totalLot: 12, standarNominal: 125000, jimpitanPerLot: 10000 },
+      { id: 4, nama: "Periode 4", penerimaPerLot: 2, totalLot: 16, standarNominal: 160000, jimpitanPerLot: 10000 }
+    ];
+
+    let configPeriode = ambilDataStorage('config_periode', DEFAULT_CONFIG_PERIODE);
+    if (!configPeriode.find(c => c.id === 4)) {
+      configPeriode.push({ id: 4, nama: "Periode 4", penerimaPerLot: 2, totalLot: 16, standarNominal: 160000, jimpitanPerLot: 10000 });
+    }
+
+    function getPeriodeTerbaru() {
+      if (!configPeriode || configPeriode.length === 0) return 4;
+      return configPeriode.reduce((max, c) => Math.max(max, parseInt(c.id, 10) || 0), 1);
+    }
+
+    let periodeAktifUndian = getPeriodeTerbaru();
+
+    let pinjamanJimpitan = ambilDataStorage('pinjaman_jimpitan', []);
+    let riwayat = ambilDataStorage('riwayat', []);
+    let pengeluaranJimpitan = ambilDataStorage('pengeluaran_jimpitan', []);
+    let pengeluaranOperasional = ambilDataStorage('pengeluaran_operasional', []);
+
+    function hitungStandarPeriode(pId) {
+      const cfg = configPeriode.find(c => c.id === pId);
+      if (!cfg) return 0;
+      if (cfg.standarNominal !== undefined && cfg.standarNominal !== null) return cfg.standarNominal;
+      return (cfg.totalLot * (cfg.jimpitanPerLot || 10000));
+    }
+
+    function buatAnggotaBaru(nama, id) {
+      const tabunganAwal = {};
+      const keikutsertaan = {};
+      configPeriode.forEach(c => {
+        tabunganAwal[c.id] = hitungStandarPeriode(c.id);
+        keikutsertaan[c.id] = true;
+      });
+      return {
+        id: id || "agt_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+        nama: nama,
+        sudahMenang: false,
+        sudahBayar: false,
+        titipanBulan: 0,
+        tabungan: tabunganAwal,
+        ikutPeriode: keikutsertaan,
+        ditarik: 0
+      };
+    }
+
+    let anggota = ambilDataStorage('anggota', null);
+    if (!anggota || !Array.isArray(anggota) || anggota.length === 0) {
+      anggota = NAMA_ANGGOTA_AWAL.map((nama, idx) => buatAnggotaBaru(nama, "agt_" + (idx + 1)));
+    }
+
+    function parseRiwayatBayar(p) {
+      const pokok = p.nominalPinjam || 0;
+      const admin = p.biayaAdmin !== undefined ? p.biayaAdmin : Math.round(pokok * 0.05);
+      const totalWajib = p.totalTagihan !== undefined ? p.totalTagihan : (pokok + admin);
+      let sudahPokok = 0, sudahAdmin = 0;
+      
+      (p.riwayatBayar || []).forEach(r => {
+         if (r.nominalPokok !== undefined && r.nominalAdmin !== undefined) {
+             sudahPokok += r.nominalPokok;
+             sudahAdmin += r.nominalAdmin;
+         } else {
+             const rasio = totalWajib > 0 ? admin / totalWajib : 0;
+             const adm = r.nominal * rasio;
+             sudahAdmin += adm;
+             sudahPokok += (r.nominal - adm);
+         }
+      });
+      
+      return {
+          pokok, admin, totalWajib, sudahPokok, sudahAdmin,
+          sisaPokok: Math.max(0, pokok - sudahPokok),
+          sisaAdmin: Math.max(0, admin - sudahAdmin),
+          sisaTotal: Math.max(0, totalWajib - (sudahPokok + sudahAdmin))
+      };
+    }
+
+    function normalisasiData() {
+      if (!Array.isArray(anggota)) anggota = [];
+      anggota.forEach((a, idx) => {
+        if (!a.id) a.id = "agt_" + (idx + 1);
+        if (!a.tabungan) a.tabungan = {};
+        if (!a.ikutPeriode) a.ikutPeriode = {};
+                if (a.titipanBulan === undefined) a.titipanBulan = 0;
+        if (a.sudahMenang === undefined) a.sudahMenang = false;
+        if (a.sudahBayar === undefined) a.sudahBayar = false;
+        if (a.ditarik === undefined) a.ditarik = 0;
+        if (a.tunggakanBulan === undefined) a.tunggakanBulan = 0;
+
+        configPeriode.forEach(c => {
+          if (a.ikutPeriode[c.id] === undefined) {
+            a.ikutPeriode[c.id] = a.tabungan[c.id] !== undefined ? (a.tabungan[c.id] > 0) : true;
+          }
+          if (a.tabungan[c.id] === undefined) {
+            a.tabungan[c.id] = a.ikutPeriode[c.id] ? hitungStandarPeriode(c.id) : 0;
+          }
+        });
+      });
+
+      if (!Array.isArray(pinjamanJimpitan)) pinjamanJimpitan = [];
+      pinjamanJimpitan.forEach(p => {
+        if (p.biayaAdmin === undefined) p.biayaAdmin = Math.round(p.nominalPinjam * 0.05);
+        if (p.totalTagihan === undefined) p.totalTagihan = p.nominalPinjam + p.biayaAdmin;
+        if (!p.riwayatBayar) p.riwayatBayar = [];
+      });
+    }
+    normalisasiData();
+
+    const p3Config = configPeriode.find(c => c.id === 3);
+    if (p3Config) {
+      p3Config.totalLot = 12;
+      p3Config.standarNominal = 125000;
+      anggota.forEach(a => {
+        if (a.tabungan && a.tabungan[3] > 0) a.tabungan[3] = 125000;
+      });
+    }
+
+        let modeFilterUndianTampilan = 'khusus';
+    let filterPeriodeAktif = getPeriodeTerbaru(); // Otomatis filter ke Periode Aktif
+    let anggotaTerpilihIndividuId = '';
+    let tabAktifSekarang = 'undian';
+
+    function setIndikatorSync(status) {
+      const el = document.getElementById('status-cloud');
+      if (!el) return;
+      if (status === 'tersambung') {
+        el.className = "inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full border border-emerald-400/40";
+        el.innerHTML = "🟢 Cloud Terhubung";
+      } else if (status === 'menyinkronkan') {
+        el.className = "inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full border border-amber-400/40";
+        el.innerHTML = "🔄 Menyimpan...";
+      } else {
+        el.className = "inline-flex items-center gap-1 bg-rose-500/20 text-rose-300 text-[10px] px-2 py-0.5 rounded-full border border-rose-400/40";
+        el.innerHTML = "⚠️ Offline";
+      }
+    }
+
+    // ================= UNDO & REDO =================
+    let riwayatState = [];
+    let indeksRiwayat = -1;
+    const MAKS_RIWAYAT = 50;
+
+    function ambilSnapshotState() {
+      return JSON.stringify({
+        anggota: anggota,
+        riwayat: riwayat,
+        pengeluaranJimpitan: pengeluaranJimpitan,
+        pengeluaranOperasional: pengeluaranOperasional,
+        configPeriode: configPeriode,
+        pinjamanJimpitan: pinjamanJimpitan,
+        periodeAktifUndian: periodeAktifUndian
+      });
+    }
+
+    function rekamState() {
+      const snapshot = ambilSnapshotState();
+      if (indeksRiwayat >= 0 && riwayatState[indeksRiwayat] === snapshot) {
+        perbaruiTombolUndoRedo();
+        return;
+      }
+      riwayatState = riwayatState.slice(0, indeksRiwayat + 1);
+      riwayatState.push(snapshot);
+      if (riwayatState.length > MAKS_RIWAYAT) riwayatState.shift();
+      indeksRiwayat = riwayatState.length - 1;
+      perbaruiTombolUndoRedo();
+    }
+
+    function perbaruiTombolUndoRedo() {
+      const btnUndo = document.getElementById('btn-undo');
+      const btnRedo = document.getElementById('btn-redo');
+      if (btnUndo) btnUndo.disabled = (indeksRiwayat <= 0);
+      if (btnRedo) btnRedo.disabled = (indeksRiwayat >= riwayatState.length - 1);
+    }
+
+    window.undoAksi = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (indeksRiwayat > 0) {
+        indeksRiwayat--;
+        terapkanSnapshot(riwayatState[indeksRiwayat]);
+      }
+    };
+
+    window.redoAksi = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (indeksRiwayat < riwayatState.length - 1) {
+        indeksRiwayat++;
+        terapkanSnapshot(riwayatState[indeksRiwayat]);
+      }
+    };
+
+    function terapkanSnapshot(snapshotStr) {
+      const data = JSON.parse(snapshotStr);
+      anggota = data.anggota;
+      riwayat = data.riwayat || [];
+      pengeluaranJimpitan = data.pengeluaranJimpitan || [];
+      pengeluaranOperasional = data.pengeluaranOperasional || [];
+      configPeriode = data.configPeriode || DEFAULT_CONFIG_PERIODE;
+      pinjamanJimpitan = data.pinjamanJimpitan || [];
+      periodeAktifUndian = getPeriodeTerbaru();
+
+      normalisasiData();
+      simpanData(false);
+      renderTabAktif();
+      perbaruiTombolUndoRedo();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redoAksi(); else undoAksi();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redoAksi();
+      }
+    });
+
+    let sedangMengundi = false;
+    let anggotaSedangDiedit = null;
+    let anggotaSedangDitarik = null;
+    let pinjamanSedangDibayar = null;
+    let indeksPinjamanDiedit = null;
+    let indeksPengeluaranSosialDiedit = null;
+    let pinjamanAktifRincianIndex = null;
+    let indeksAngsuranSatuanDiedit = null;
+    let anggotaMultiBulanId = null;
+
+    function formatRupiah(angka) {
+      return new Intl.NumberFormat('id-ID').format(Math.round(angka) || 0);
+    }
+
+    function getTanggalHariIniInput() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    }
+
+    function konversiTanggalKeDisplay(tglStr) {
+      if (!tglStr) return '-';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(tglStr)) {
+        const [y, m, d] = tglStr.split('-').map(Number);
+        return new Date(y, m-1, d).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      return tglStr;
+    }
+
+    function konversiDisplayKeInput(tglStr) {
+      if (!tglStr) return getTanggalHariIniInput();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(tglStr)) return tglStr;
+      const parsed = new Date(tglStr);
+      if (!isNaN(parsed.getTime())) {
+        return `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`;
+      }
+      return getTanggalHariIniInput();
+    }
+
+    function ambilTanggalLengkap() {
+      return new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function ambilBulanTahun() {
+      return new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    }
+
+    function simpanLocalStorage(catatKeRiwayat = false) {
+      localStorage.setItem('embugari_anggota_v23', JSON.stringify(anggota));
+      localStorage.setItem('embugari_riwayat_v23', JSON.stringify(riwayat));
+      localStorage.setItem('embugari_pengeluaran_jimpitan_v23', JSON.stringify(pengeluaranJimpitan));
+      localStorage.setItem('embugari_pengeluaran_operasional_v23', JSON.stringify(pengeluaranOperasional));
+      localStorage.setItem('embugari_config_periode_v23', JSON.stringify(configPeriode));
+      localStorage.setItem('embugari_pinjaman_jimpitan_v23', JSON.stringify(pinjamanJimpitan));
+      if (catatKeRiwayat) rekamState();
+    }
+
+    function simpanKeCloud() {
+      if (!db) return;
+      if (!isAdmin) {
+        console.warn("Sinkronisasi cloud dilewati: Bukan mode Admin.");
+        return;
+      }
+      setIndikatorSync('menyinkronkan');
+      db.collection('arisan').doc('data_utama').set({
+        anggota: anggota,
+        riwayat: riwayat,
+        pengeluaranJimpitan: pengeluaranJimpitan,
+        pengeluaranOperasional: pengeluaranOperasional,
+        configPeriode: configPeriode,
+        pinjamanJimpitan: pinjamanJimpitan,
+        periodeAktifUndian: getPeriodeTerbaru(),
+        pinAdmin: PIN_ADMIN,
+        waktuUpdate: new Date().toISOString()
+      }).then(() => {
+        setIndikatorSync('tersambung');
+      }).catch((err) => {
+        console.error("Gagal sinkron ke Firebase:", err);
+        setIndikatorSync('offline');
+      });
+    }
+
+    function simpanData(catatKeRiwayat = true) {
+      if (!cekHakAksesAdmin()) return;
+      simpanLocalStorage(catatKeRiwayat);
+      simpanKeCloud();
+    }
+
+    function mulaiSinkronisasiCloud() {
+      if (!db) {
+        setIndikatorSync('offline');
+        return;
+      }
+      db.collection('arisan').doc('data_utama').onSnapshot((doc) => {
+        if (doc.exists) {
+          if (doc.metadata.hasPendingWrites) {
+            setIndikatorSync('tersambung');
+            return;
+          }
+          const data = doc.data();
+          if (data.anggota && Array.isArray(data.anggota)) anggota = data.anggota;
+          if (data.riwayat && Array.isArray(data.riwayat)) riwayat = data.riwayat;
+          if (data.pengeluaranJimpitan && Array.isArray(data.pengeluaranJimpitan)) pengeluaranJimpitan = data.pengeluaranJimpitan;
+          if (data.pengeluaranOperasional && Array.isArray(data.pengeluaranOperasional)) pengeluaranOperasional = data.pengeluaranOperasional;
+          if (data.configPeriode && Array.isArray(data.configPeriode)) configPeriode = data.configPeriode;
+          if (data.pinjamanJimpitan && Array.isArray(data.pinjamanJimpitan)) pinjamanJimpitan = data.pinjamanJimpitan;
+
+          if (data.pinAdmin) {
+            PIN_ADMIN = data.pinAdmin;
+            localStorage.setItem('embugari_pin_admin', PIN_ADMIN);
+          }
+
+          if (!configPeriode.find(c => c.id === periodeAktifUndian)) {
+            periodeAktifUndian = getPeriodeTerbaru();
+          }
+
+          normalisasiData();
+          simpanLocalStorage(false);
+          renderTabAktif();
+          setIndikatorSync('tersambung');
+        } else {
+          if (isAdmin) simpanKeCloud();
+        }
+      }, (err) => {
+        console.error("Gagal mendengarkan update Firestore:", err);
+        setIndikatorSync('offline');
+      });
+    }
+
+    function renderTabAktif() {
+      if (tabAktifSekarang === 'undian') renderUndian();
+      else if (tabAktifSekarang === 'setoran') renderSetoran();
+      else if (tabAktifSekarang === 'jimpitan') renderJimpitan();
+    }
+
+    function isAnggotaIkutPeriode(agt, pId) {
+      if (!agt) return false;
+      if (agt.ikutPeriode && agt.ikutPeriode[pId] !== undefined) return Boolean(agt.ikutPeriode[pId]);
+      if (agt.tabungan && agt.tabungan[pId] !== undefined) return agt.tabungan[pId] > 0;
+      return true;
+    }
+
+    function getMapPemenangPeriode(pId) {
+      const map = new Map();
+      riwayat.forEach(r => {
+        const lotPeriode = r.periode ? parseInt(r.periode, 10) : getPeriodeTerbaru();
+        if (lotPeriode === pId) {
+          (r.pemenang || []).forEach(nama => map.set(nama, r.lot));
+        }
+      });
+      return map;
+    }
+
+    function hitungPotonganSosialAnggota(agtId) {
+      let totalPotongan = 0;
+      pengeluaranJimpitan.forEach(p => {
+        const partisipan = (p.partisipanIds && Array.isArray(p.partisipanIds)) ? p.partisipanIds : anggota.map(a => a.id || a.nama);
+        if (partisipan.length > 0 && (partisipan.includes(agtId) || partisipan.includes(agtId.toString()))) {
+          totalPotongan += Math.round(p.nominal / partisipan.length);
+        }
+      });
+      return totalPotongan;
+    }
+
+    function hitungSaldoAnggota(agt) {
+      let totalKotor = 0;
+      configPeriode.forEach(c => {
+        totalKotor += (agt.tabungan && agt.tabungan[c.id]) ? agt.tabungan[c.id] : 0;
+      });
+      if (agt.sudahBayar) totalKotor += TARIF_JIMPITAN;
+      
+      return totalKotor - (agt.ditarik || 0) - hitungPotonganSosialAnggota(agt.id || agt.nama);
+    }
+
+    function hitungKasGlobal() {
+      let totalTabunganBersih = 0;
+      anggota.forEach(a => { totalTabunganBersih += hitungSaldoAnggota(a); });
+      const totalPengeluaranSosial = pengeluaranJimpitan.reduce((acc, curr) => acc + curr.nominal, 0);
+
+      let totalUangDipinjamkanPokok = 0;
+      let totalPengembalianPokok = 0;
+      let totalAdminTerkumpul = 0;
+      let totalSisaPiutangSemua = 0;
+      let totalSisaPiutangPokok = 0;
+      let jumlahPeminjamAktif = 0;
+
+      pinjamanJimpitan.forEach(p => {
+        const pb = parseRiwayatBayar(p);
+        totalUangDipinjamkanPokok += pb.pokok;
+        totalPengembalianPokok += pb.sudahPokok;
+        totalAdminTerkumpul += pb.sudahAdmin;
+        totalSisaPiutangPokok += pb.sisaPokok;
+        totalSisaPiutangSemua += pb.sisaTotal;
+        if (pb.sisaTotal > 0) jumlahPeminjamAktif++;
+      });
+
+            let totalTalanganTunggakan = 0;
+      anggota.forEach(a => { totalTalanganTunggakan += (a.tunggakanBulan || 0) * 90000; });
+
+      const sisaPiutangPokok = Math.max(0, totalUangDipinjamkanPokok - totalPengembalianPokok);
+      const saldoTunaiJimpitanFisik = Math.max(0, totalTabunganBersih - sisaPiutangPokok - totalTalanganTunggakan);
+      const totalKeluarOps = pengeluaranOperasional.reduce((acc, curr) => acc + curr.nominal, 0);
+      const saldoKasOperasional = Math.max(0, Math.round(totalAdminTerkumpul) - totalKeluarOps);
+
+      return {
+        totalDanaTalangan: totalTalanganTunggakan,
+        totalTabungan: totalTabunganBersih,
+        totalPengeluaran: totalPengeluaranSosial,
+        totalPiutang: totalSisaPiutangSemua,
+        totalPiutangPokok: totalSisaPiutangPokok,
+        saldoTunaiFisik: saldoTunaiJimpitanFisik,
+        saldoKasOperasional: saldoKasOperasional,
+        totalAsetKekayaan: saldoTunaiJimpitanFisik + saldoKasOperasional + totalSisaPiutangSemua,
+        jumlahPeminjamAktif: jumlahPeminjamAktif
+      };
+    }
+
+    window.gantiTab = function(namaTab) {
+      tabAktifSekarang = namaTab;
+      ['undian', 'setoran', 'jimpitan'].forEach(t => {
+        const el = document.getElementById(`halaman-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (t === namaTab) {
+          el.classList.remove('hidden');
+          btn.className = "flex-1 py-2 font-bold rounded-lg bg-indigo-700 text-white shadow-xs";
+        } else {
+          el.classList.add('hidden');
+          btn.className = "flex-1 py-2 font-bold rounded-lg text-slate-600 hover:text-indigo-700";
+        }
+      });
+      renderTabAktif();
+    };
+
+    function updateDropdownPeriodeUndian() {
+      const select = document.getElementById('pilihan-periode-undian');
+      if (!select) return;
+      select.innerHTML = '';
+      const latestId = getPeriodeTerbaru();
+      configPeriode.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.nama} ${c.id === latestId ? '(Aktif)' : ''}`;
+        if (c.id === periodeAktifUndian) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    window.gantiPeriodeUndianAktif = function(pId) {
+      periodeAktifUndian = parseInt(pId, 10);
+      renderUndian();
+      renderSetoran();
+    };
+
+    window.setFilterUndianTampilan = function(mode) {
+      modeFilterUndianTampilan = mode;
+      const btnK = document.getElementById('btn-filter-undian-khusus');
+      const btnS = document.getElementById('btn-filter-undian-semua');
+      if (mode === 'khusus') {
+        btnK.className = "px-2 py-0.5 rounded font-bold bg-indigo-700 text-white";
+        btnS.className = "px-2 py-0.5 rounded text-slate-600";
+      } else {
+        btnK.className = "px-2 py-0.5 rounded text-slate-600";
+        btnS.className = "px-2 py-0.5 rounded font-bold bg-indigo-700 text-white";
+      }
+      renderUndian();
+    };
+
+    window.toggleIkutPeriodeUndian = function(agtId) {
+      if (!cekHakAksesAdmin()) return;
+      const agt = anggota.find(a => a.id === agtId || a.nama === agtId);
+      if (!agt) return;
+      if (!agt.ikutPeriode) agt.ikutPeriode = {};
+      const statusSekarang = isAnggotaIkutPeriode(agt, periodeAktifUndian);
+      agt.ikutPeriode[periodeAktifUndian] = !statusSekarang;
+      if (!agt.tabungan) agt.tabungan = {};
+      agt.tabungan[periodeAktifUndian] = !statusSekarang ? hitungStandarPeriode(periodeAktifUndian) : 0;
+      simpanData(true);
+      renderUndian();
+      renderSetoran();
+      renderJimpitan();
+    };
+
+    function updateDropdownTuanRumah() {
+      const select = document.getElementById('pilihan-tuan-rumah');
+      if (!select) return;
+      const valLama = select.value;
+      select.innerHTML = '<option value="">-- Pilih Tuan Rumah --</option>';
+      anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian)).forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.nama;
+        opt.textContent = a.nama;
+        if (a.nama === valLama) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function updateDropdownPeminjam() {
+      const select = document.getElementById('input-pinjam-anggota');
+      if (!select) return;
+      const valLama = select.value;
+      select.innerHTML = '<option value="">-- Pilih Nama Peminjam --</option>';
+      anggota.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id || a.nama;
+        opt.textContent = a.nama;
+        if (opt.value === valLama || a.nama === valLama) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function updateDropdownFilterIndividu() {
+      const select = document.getElementById('filter-laporan-individu');
+      if (!select) return;
+      const valLama = select.value;
+      select.innerHTML = '<option value="">-- Pilih Nama Anggota --</option>';
+      anggota.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id || a.nama;
+        opt.textContent = a.nama;
+        if (opt.value === valLama || a.nama === valLama) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderGridPartisipanBaru() {
+      const grid = document.getElementById('grid-partisipan-pengeluaran-baru');
+      if (!grid) return;
+      grid.innerHTML = '';
+      anggota.forEach(a => {
+        const val = a.id || a.nama;
+        const label = document.createElement('label');
+        label.className = "flex items-center gap-1 p-0.5 rounded hover:bg-slate-50 cursor-pointer truncate";
+        label.innerHTML = `<input type="checkbox" name="partisipan_baru" value="${val}" checked onchange="hitungPreviewBebanPengeluaran()" class="rounded text-teal-600 focus:ring-0"><span class="truncate">${a.nama}</span>`;
+        grid.appendChild(label);
+      });
+      hitungPreviewBebanPengeluaran();
+    }
+
+    window.pilihSemuaPartisipanBaru = function(status) {
+      if (!cekHakAksesAdmin()) return;
+      document.querySelectorAll('input[name="partisipan_baru"]').forEach(cb => cb.checked = status);
+      hitungPreviewBebanPengeluaran();
+    };
+
+    window.hitungPreviewBebanPengeluaran = function() {
+      const inputNom = document.getElementById('input-nominal-pengeluaran');
+      const nomStr = inputNom ? inputNom.value : '';
+      const nominal = parseInt(String(nomStr).replace(/[^0-9]/g, ''), 10) || 0;
+      const count = document.querySelectorAll('input[name="partisipan_baru"]:checked').length;
+      const beban = count > 0 ? Math.round(nominal / count) : 0;
+      const el = document.getElementById('preview-beban-pengeluaran');
+      if (el) el.textContent = `${count} dari ${anggota.length} terpilih • Potongan: Rp ${formatRupiah(beban)} / org`;
+    };
+
+    function renderGridPartisipanEdit(partisipanTerpilih) {
+      const grid = document.getElementById('grid-partisipan-pengeluaran-edit');
+      if (!grid) return;
+      grid.innerHTML = '';
+      const listTerpilih = (partisipanTerpilih && Array.isArray(partisipanTerpilih)) ? partisipanTerpilih : anggota.map(a => a.id || a.nama);
+      anggota.forEach(a => {
+        const val = a.id || a.nama;
+        const isChecked = listTerpilih.includes(val) || listTerpilih.includes(a.nama);
+        const label = document.createElement('label');
+        label.className = "flex items-center gap-1 p-0.5 rounded hover:bg-slate-50 cursor-pointer truncate";
+        label.innerHTML = `<input type="checkbox" name="partisipan_edit" value="${val}" ${isChecked ? 'checked' : ''} onchange="hitungPreviewBebanEditPengeluaran()" class="rounded text-teal-600 focus:ring-0"><span class="truncate">${a.nama}</span>`;
+        grid.appendChild(label);
+      });
+      hitungPreviewBebanEditPengeluaran();
+    }
+
+    window.pilihSemuaPartisipanEdit = function(status) {
+      if (!cekHakAksesAdmin()) return;
+      document.querySelectorAll('input[name="partisipan_edit"]').forEach(cb => cb.checked = status);
+      hitungPreviewBebanEditPengeluaran();
+    };
+
+    window.hitungPreviewBebanEditPengeluaran = function() {
+      const inputNom = document.getElementById('modal-edit-keluar-nominal');
+      const nomStr = inputNom ? inputNom.value : '';
+      const nominal = parseInt(String(nomStr).replace(/[^0-9]/g, ''), 10) || 0;
+      const count = document.querySelectorAll('input[name="partisipan_edit"]:checked').length;
+      const beban = count > 0 ? Math.round(nominal / count) : 0;
+      const el = document.getElementById('preview-beban-edit-pengeluaran');
+      if (el) el.textContent = `${count} dari ${anggota.length} terpilih • Potongan: Rp ${formatRupiah(beban)} / org`;
+    };
+
+    window.tampilkanLaporanIndividu = function(agtId) {
+      anggotaTerpilihIndividuId = agtId;
+      const boxDetail = document.getElementById('box-detail-individu');
+      const boxPlaceholder = document.getElementById('box-placeholder-individu');
+      if (!agtId) {
+        if (boxDetail) boxDetail.classList.add('hidden');
+        if (boxPlaceholder) boxPlaceholder.classList.remove('hidden');
+        return;
+      }
+      const agt = anggota.find(a => (a.id && a.id === agtId) || a.nama === agtId);
+      if (!agt) return;
+      if (boxDetail) boxDetail.classList.remove('hidden');
+      if (boxPlaceholder) boxPlaceholder.classList.add('hidden');
+
+      let totalTabunganKotor = 0;
+      let rincianPeriodeTeks = [];
+      configPeriode.forEach(c => {
+        const val = (agt.tabungan && agt.tabungan[c.id]) ? agt.tabungan[c.id] : 0;
+        totalTabunganKotor += val;
+        rincianPeriodeTeks.push(`${c.nama}: Rp ${formatRupiah(val)}`);
+      });
+
+      if (agt.sudahBayar) {
+        totalTabunganKotor += TARIF_JIMPITAN;
+      }
+
+      const potSosial = hitungPotonganSosialAnggota(agt.id || agt.nama);
+      const potTarik = agt.ditarik || 0;
+      const totalPotongan = potSosial + potTarik;
+
+      const daftarPinjamanAgt = pinjamanJimpitan.filter(p => (p.anggotaId && p.anggotaId === agt.id) || p.nama === agt.nama);
+      let sisaHutangTotal = 0;
+      daftarPinjamanAgt.forEach(p => {
+        const pb = parseRiwayatBayar(p);
+        sisaHutangTotal += isAdmin ? pb.sisaTotal : pb.sisaPokok;
+      });
+
+      const hakSaldoBersih = totalTabunganKotor - totalPotongan - sisaHutangTotal;
+
+      document.getElementById('ind-total-kotor').textContent = `Rp ${formatRupiah(totalTabunganKotor)}`;
+      document.getElementById('ind-rincian-periode').textContent = rincianPeriodeTeks.join(' • ');
+
+      document.getElementById('ind-sisa-pinjaman').textContent = `Rp ${formatRupiah(sisaHutangTotal)}`;
+      document.getElementById('label-ind-sisa-pinjaman').textContent = isAdmin ? 'Sisa Hutang (Pokok + Admin)' : 'Sisa Hutang (Hanya Pokok)';
+      document.getElementById('ind-status-pinjaman').textContent = daftarPinjamanAgt.length === 0 ? 'Tidak ada pinjaman' : (sisaHutangTotal === 0 ? 'Lunas' : `${daftarPinjamanAgt.length} catatan berjalan`);
+
+      document.getElementById('ind-potongan').textContent = `Rp ${formatRupiah(totalPotongan)}`;
+      let ketPotongan = [];
+      if (potSosial > 0) ketPotongan.push(`Sosial: Rp ${formatRupiah(potSosial)}`);
+      if (potTarik > 0) ketPotongan.push(`Ditarik: Rp ${formatRupiah(potTarik)}`);
+      document.getElementById('ind-ket-potongan').textContent = ketPotongan.length > 0 ? ketPotongan.join(' | ') : 'Tidak ada potongan kas';
+
+      const elSaldoBersih = document.getElementById('ind-saldo-bersih');
+      elSaldoBersih.textContent = (hakSaldoBersih >= 0 ? '' : '- ') + `Rp ${formatRupiah(Math.abs(hakSaldoBersih))}`;
+      elSaldoBersih.className = `text-base font-black mt-0.5 ${hakSaldoBersih >= 0 ? 'text-indigo-900' : 'text-rose-600'}`;
+
+      let teksWA = `Assalamu'alaikum wr. wb..\nKepada Yth. *${agt.nama.toUpperCase()}* 🙏\n\n`;
+      teksWA += `Berikut rincian keuangan & arisan per (${ambilTanggalLengkap()}):\n\n`;
+      teksWA += `💰 *TABUNGAN JIMPITAN KOTOR: Rp ${formatRupiah(totalTabunganKotor)}*\n`;
+      configPeriode.forEach(c => {
+        teksWA += `• ${c.nama}: Rp ${formatRupiah((agt.tabungan && agt.tabungan[c.id]) || 0)}\n`;
+      });
+      if (agt.sudahBayar) teksWA += `• Jimpitan Bulan Ini: Rp 10.000\n`;
+      teksWA += `\n`;
+
+      if (totalPotongan > 0) {
+        teksWA += `✂️ *POTONGAN KAS: Rp ${formatRupiah(totalPotongan)}*\n`;
+        if (potSosial > 0) teksWA += `• Potongan Sosial: Rp ${formatRupiah(potSosial)}\n`;
+        if (potTarik > 0) teksWA += `• Penarikan Jimpitan: Rp ${formatRupiah(potTarik)}\n`;
+        teksWA += `\n`;
+      }
+
+      teksWA += `🤝 *SISA HUTANG PINJAMAN: Rp ${formatRupiah(sisaHutangTotal)}*\n`;
+      if (daftarPinjamanAgt.length === 0) teksWA += `• Tidak memiliki pinjaman berjalan\n\n`;
+      else if (sisaHutangTotal === 0) teksWA += `• Seluruh pinjaman LUNAS ✅\n\n`;
+      else {
+        let wPokok = 0, wAdmin = 0, wSudahTotal = 0;
+        daftarPinjamanAgt.forEach(p => { const b=parseRiwayatBayar(p); wPokok+=b.pokok; wAdmin+=b.admin; wSudahTotal+=(b.sudahPokok+b.sudahAdmin); });
+        teksWA += `• Total Pokok: Rp ${formatRupiah(wPokok)}\n`;
+        if (isAdmin) teksWA += `• Biaya Admin 5%: Rp ${formatRupiah(wAdmin)}\n`;
+        teksWA += `• Telah Diangsur: Rp ${formatRupiah(wSudahTotal)}\n\n`;
+      }
+
+      const infoTitipan = (agt.titipanBulan && agt.titipanBulan > 0) ? ` (Titipan +${agt.titipanBulan} bln)` : '';
+      teksWA += `📌 *STATUS IURAN BULAN INI:* ${agt.sudahBayar ? 'LUNAS ✅' + infoTitipan : 'BELUM DIBAYAR ⏳'}\n\n`;
+      teksWA += `⚖️ *HAK SALDO BERSIH ANDA: Rp ${formatRupiah(hakSaldoBersih)}*\n*(Total Tabungan - Potongan - Sisa Hutang)*\n\nTerima kasih atas kebersamaan keluarga.. 🙏😊`;
+      document.getElementById('teks-wa-individu').value = teksWA;
+    };
+
+    window.salinPesanIndividuWA = function() {
+      const teks = document.getElementById('teks-wa-individu').value.trim();
+      if (!teks) return;
+      navigator.clipboard.writeText(teks).then(() => alert("Pesan laporan pribadi berhasil disalin!"));
+    };
+
+    // ================= RENDER TAB 1: UNDIAN =================
+    function renderUndian() {
+      updateDropdownPeriodeUndian();
+      updateDropdownTuanRumah();
+
+      const cfgAktif = configPeriode.find(c => c.id === periodeAktifUndian) || { nama: `Periode ${periodeAktifUndian}` };
+      const jdl = document.getElementById('judul-tabel-riwayat');
+      if (jdl) jdl.textContent = `Riwayat Penerima Lot ${cfgAktif.nama}`;
+
+      const mapPemenang = getMapPemenangPeriode(periodeAktifUndian);
+      const anggotaIkut = anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian));
+      const kandidatBelumMenang = anggotaIkut.filter(a => !mapPemenang.has(a.nama));
+
+      const daftarTampil = modeFilterUndianTampilan === 'khusus' ? anggotaIkut : anggota;
+
+      document.getElementById('badge-total').textContent = `${anggotaIkut.length} Anggota Ikut ${cfgAktif.nama}`;
+      document.getElementById('label-total').textContent = `Total Ikut: ${anggotaIkut.length}`;
+      document.getElementById('label-sisa').textContent = `Belum Menang: ${kandidatBelumMenang.length}`;
+
+      const riwayatPeriodeIni = riwayat.filter(r => (r.periode ? parseInt(r.periode, 10) : getPeriodeTerbaru()) === periodeAktifUndian);
+      const lotTerbesar = riwayatPeriodeIni.reduce((max, r) => Math.max(max, parseInt(r.lot, 10) || 0), 0);
+      const inputLotKe = document.getElementById('input-lot-ke');
+      if (inputLotKe && !sedangMengundi) inputLotKe.value = lotTerbesar + 1;
+
+      const daftarAnggotaEl = document.getElementById('daftar-anggota');
+      daftarAnggotaEl.innerHTML = '';
+      if (daftarTampil.length === 0) {
+        daftarAnggotaEl.innerHTML = '<li class="p-2 text-center text-slate-400 text-xs">Belum ada anggota yang ikut di periode ini.</li>';
+      } else {
+        daftarTampil.forEach((item, idx) => {
+          const ikut = isAnggotaIkutPeriode(item, periodeAktifUndian);
+          const sudahMenang = mapPemenang.has(item.nama);
+          const nomorLot = mapPemenang.get(item.nama);
+
+          const li = document.createElement('li');
+          li.className = `flex justify-between items-center p-1.5 rounded-lg border text-xs ${ikut ? 'bg-slate-50 border-slate-200' : 'bg-slate-100/60 border-dashed opacity-60'}`;
+          li.innerHTML = `
+            <div class="flex items-center gap-1.5 truncate pr-1">
+              <span class="text-slate-400 font-mono w-4">${idx + 1}.</span>
+              <span class="${sudahMenang ? 'line-through text-slate-400' : 'font-medium text-slate-800'} truncate">${item.nama}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="toggleIkutPeriodeUndian('${item.id}')" class="text-[9px] font-bold px-1.5 py-0.5 rounded ${ikut ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-600'}">
+                ${ikut ? `✓ P${periodeAktifUndian}` : '✕ Tdk'}
+              </button>
+              ${ikut ? (sudahMenang ? `<span class="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-1 py-0.5 rounded">Lot ${nomorLot}</span>` : `<span class="text-[9px] bg-amber-100 text-amber-700 font-semibold px-1 py-0.5 rounded">Belum</span>`) : ''}
+              <button onclick="hapusAnggota('${item.id}')" class="text-rose-400 hover:text-rose-600 px-1 font-bold khusus-admin">×</button>
+            </div>
+          `;
+          daftarAnggotaEl.appendChild(li);
+        });
+      }
+
+      const tabelRiwayat = document.getElementById('tabel-riwayat');
+      tabelRiwayat.innerHTML = '';
+      if (riwayatPeriodeIni.length === 0) {
+        tabelRiwayat.innerHTML = `<tr><td colspan="${isAdmin ? 5 : 4}" class="py-3 text-center text-slate-400 text-xs">Belum ada pengundian di periode ini.</td></tr>`;
+      } else {
+        riwayatPeriodeIni.slice().sort((a,b) => b.lot - a.lot).forEach(item => {
+          const indexAsli = riwayat.indexOf(item);
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50';
+          tr.innerHTML = `
+            <td class="p-2 font-bold text-slate-700">Lot ${item.lot}</td>
+            <td class="p-2 font-semibold text-indigo-700">${(item.pemenang || []).join(' & ')}</td>
+            <td class="p-2 text-right font-medium text-amber-700">${item.tuanRumah || '-'}</td>
+            <td class="p-2 text-slate-500">${konversiTanggalKeDisplay(item.tanggal)}</td>
+            <td class="p-2 text-center space-x-1 khusus-admin">
+              <button onclick="bukaModalEditRiwayatLot(${indexAsli})" class="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded border border-amber-200">Edit</button>
+              <button onclick="hapusRiwayatLot(${indexAsli})" class="text-[10px] text-rose-500 hover:text-rose-700 font-bold px-1">✕</button>
+            </td>
+          `;
+          tabelRiwayat.appendChild(tr);
+        });
+      }
+    }
+
+    // Modal Input/Edit Lot Manual
+    window.bukaModalInputManualLot = function() {
+      if (!cekHakAksesAdmin()) return;
+      document.getElementById('manual-lot-edit-id').value = '';
+      document.getElementById('judul-modal-manual-lot').innerHTML = `<span>✍️ Input Penerima Lot (Periode ${periodeAktifUndian})</span>`;
+      const riwayatP = riwayat.filter(r => (r.periode ? parseInt(r.periode, 10) : getPeriodeTerbaru()) === periodeAktifUndian);
+      document.getElementById('manual-lot-nomor').value = riwayatP.reduce((max, r) => Math.max(max, parseInt(r.lot, 10) || 0), 0) + 1;
+      document.getElementById('manual-lot-tanggal').value = getTanggalHariIniInput();
+      document.getElementById('manual-lot-jumlah').value = "2";
+      populateSelectPemenangManual();
+      sesuaikanFieldPemenangManual("2");
+      document.getElementById('modal-input-lot-manual').classList.remove('hidden');
+    };
+
+    window.bukaModalEditRiwayatLot = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      const item = riwayat[index];
+      if (!item) return;
+      document.getElementById('manual-lot-edit-id').value = index.toString();
+      document.getElementById('judul-modal-manual-lot').innerHTML = `<span>✏️ Edit Penerima Lot ${item.lot}</span>`;
+      document.getElementById('manual-lot-nomor').value = item.lot;
+      document.getElementById('manual-lot-tanggal').value = konversiDisplayKeInput(item.tanggal);
+      const pemenangArr = item.pemenang || [];
+      const jml = Math.max(1, pemenangArr.length);
+      document.getElementById('manual-lot-jumlah').value = jml.toString();
+      populateSelectPemenangManual(pemenangArr);
+      sesuaikanFieldPemenangManual(jml.toString());
+      const selTR = document.getElementById('manual-lot-tuan-rumah');
+      if (selTR) selTR.value = item.tuanRumah || '';
+      document.getElementById('modal-input-lot-manual').classList.remove('hidden');
+    };
+
+    window.tutupModalInputManualLot = function() {
+      document.getElementById('modal-input-lot-manual').classList.add('hidden');
+    };
+
+    function populateSelectPemenangManual(selectedValues = []) {
+      const anggotaP = anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian));
+      for (let i = 1; i <= 4; i++) {
+        const sel = document.getElementById(`manual-pemenang-${i}`);
+        if (!sel) continue;
+        sel.innerHTML = '<option value="">-- Pilih Penerima --</option>';
+        anggotaP.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.nama;
+          opt.textContent = a.nama;
+          if (selectedValues[i - 1] === a.nama) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      }
+      const selTR = document.getElementById('manual-lot-tuan-rumah');
+      if (selTR) {
+        selTR.innerHTML = '<option value="">-- Pilih Tuan Rumah (Opsional) --</option>';
+        anggotaP.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.nama;
+          opt.textContent = a.nama;
+          selTR.appendChild(opt);
+        });
+      }
+    }
+
+    window.sesuaikanFieldPemenangManual = function(val) {
+      const jml = parseInt(val, 10) || 2;
+      for (let i = 1; i <= 4; i++) {
+        const w = document.getElementById(`wadah-manual-pemenang-${i}`);
+        if (w) { if (i <= jml) w.classList.remove('hidden'); else w.classList.add('hidden'); }
+      }
+    };
+
+    window.simpanManualLot = function(e) {
+      e.preventDefault();
+      if (!cekHakAksesAdmin()) return;
+      const editIdxStr = document.getElementById('manual-lot-edit-id').value;
+      const nomorLot = parseInt(document.getElementById('manual-lot-nomor').value, 10);
+      const tgl = document.getElementById('manual-lot-tanggal').value || getTanggalHariIniInput();
+      const jml = parseInt(document.getElementById('manual-lot-jumlah').value, 10) || 2;
+      const tuanRumah = document.getElementById('manual-lot-tuan-rumah').value || "Belum Ditentukan";
+
+      const pemenang = [];
+      for (let i = 1; i <= jml; i++) {
+        const sel = document.getElementById(`manual-pemenang-${i}`);
+        if (sel && sel.value) pemenang.push(sel.value);
+      }
+      if (pemenang.length === 0) return alert('Pilih minimal 1 nama penerima.');
+
+      const dataLot = { periode: periodeAktifUndian, lot: nomorLot, pemenang: pemenang, tuanRumah: tuanRumah, tanggal: tgl };
+      if (editIdxStr !== '') riwayat[parseInt(editIdxStr, 10)] = dataLot;
+      else riwayat.push(dataLot);
+
+      simpanData(true);
+      renderUndian();
+      tutupModalInputManualLot();
+    };
+
+    window.hapusRiwayatLot = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      const item = riwayat[index];
+      if (!item) return;
+      if (confirm(`Hapus catatan Lot ${item.lot}?`)) {
+        riwayat.splice(index, 1);
+        simpanData(true);
+        renderUndian();
+      }
+    };
+
+    // Kocok Otomatis
+    const wadahLayar = document.getElementById('wadah-layar');
+    const layarKocok = document.getElementById('layar-kocok');
+    const tombolKocok = document.getElementById('tombol-kocok');
+
+    tombolKocok.addEventListener('click', () => {
+      if (!cekHakAksesAdmin()) return;
+      if (sedangMengundi) return;
+      const mapPemenang = getMapPemenangPeriode(periodeAktifUndian);
+      const kandidat = anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian) && !mapPemenang.has(a.nama));
+      const targetJumlah = parseInt(document.getElementById('pilihan-jumlah-pemenang').value, 10) || 2;
+
+      if (kandidat.length === 0) return alert(`Semua anggota yang ikut di Periode ${periodeAktifUndian} telah menang.`);
+
+      const jumlahDitarik = Math.min(targetJumlah, kandidat.length);
+      sedangMengundi = true;
+      tombolKocok.disabled = true;
+      layarKocok.classList.add('kocok-animasi');
+      wadahLayar.classList.add('border-indigo-400');
+
+      let counter = 0;
+      const animasi = setInterval(() => {
+        const acak = [];
+        for (let i = 0; i < jumlahDitarik; i++) acak.push(kandidat[Math.floor(Math.random() * kandidat.length)].nama);
+        layarKocok.textContent = acak.join(' & ');
+        counter++;
+
+        if (counter >= 35) {
+          clearInterval(animasi);
+          const calon = [...kandidat];
+          const pemenangTerpilih = [];
+          for (let i = 0; i < jumlahDitarik; i++) {
+            const idx = Math.floor(Math.random() * calon.length);
+            pemenangTerpilih.push(calon.splice(idx, 1)[0].nama);
+          }
+
+          layarKocok.classList.remove('kocok-animasi');
+          layarKocok.innerHTML = `🏆 ` + pemenangTerpilih.map(n => `<span class="text-emerald-700 font-extrabold">${n}</span>`).join(' & ');
+
+          const lotNomor = parseInt(document.getElementById('input-lot-ke').value, 10) || 10;
+          const tuanRumah = document.getElementById('pilihan-tuan-rumah').value || "Belum Ditentukan";
+          const anggotaLunas = anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian) && a.sudahBayar).length || 25;
+          const totalArisan = anggotaLunas * TARIF_ARISAN;
+          const jatahPerOrang = Math.floor(totalArisan / pemenangTerpilih.length);
+
+          let teksLaporan = `Assalamu'alaikum wr. wb..\nInfo penerima lot ke-${lotNomor} arisan Keluarga Besar EMBUGARI (${ambilTanggalLengkap()}):\n${pemenangTerpilih.map(n => `*${n.toUpperCase()}*`).join(' dan ')}..😊🙏\n\n`;
+          teksLaporan += `💰 *RINCIAN DANA:* \n`;
+          pemenangTerpilih.forEach(n => { teksLaporan += `• *${n.toUpperCase()}*: Rp ${formatRupiah(jatahPerOrang)}\n`; });
+          teksLaporan += `\n• Tuan Rumah: *${tuanRumah.toUpperCase()}* (Rp ${formatRupiah(anggotaLunas * TARIF_KONSUMSI)})\n`;
+          teksLaporan += `• Kas Jimpitan: Rp ${formatRupiah(hitungKasGlobal().saldoTunaiFisik)}\n\nTerima kasih atas kebersamaan keluarga.. 🙏😊`;
+          document.getElementById('area-laporan-wa').value = teksLaporan;
+
+          riwayat.push({ periode: periodeAktifUndian, lot: lotNomor, pemenang: pemenangTerpilih, tuanRumah: tuanRumah, tanggal: getTanggalHariIniInput() });
+          simpanData(true);
+          renderUndian();
+          sedangMengundi = false;
+          tombolKocok.disabled = false;
+        }
+      }, 70);
+    });
+
+    document.getElementById('tombol-salin-wa').addEventListener('click', () => {
+      const teks = document.getElementById('area-laporan-wa').value.trim();
+      if (!teks) return alert('Silakan undi atau catat arisan terlebih dahulu.');
+      navigator.clipboard.writeText(teks).then(() => alert('Laporan WA berhasil disalin!'));
+    });
+
+    document.getElementById('form-anggota').addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!cekHakAksesAdmin()) return;
+      const nama = document.getElementById('input-nama').value.trim();
+      if (!nama) return;
+      anggota.push(buatAnggotaBaru(nama));
+      document.getElementById('input-nama').value = '';
+      simpanData(true);
+      renderUndian();
+      renderJimpitan();
+    });
+
+    window.hapusAnggota = function(id) {
+      if (!cekHakAksesAdmin()) return;
+      if (confirm('Hapus anggota ini dari daftar arisan keluarga?')) {
+        anggota = anggota.filter(a => a.id !== id && a.nama !== id);
+        simpanData(true);
+        renderUndian();
+        renderJimpitan();
+      }
+    };
+
+    document.getElementById('tombol-reset').addEventListener('click', () => {
+      if (!cekHakAksesAdmin()) return;
+      if (confirm(`Reset siklus undian untuk Periode ${periodeAktifUndian}?`)) {
+        riwayat = riwayat.filter(r => (r.periode ? parseInt(r.periode, 10) : getPeriodeTerbaru()) !== periodeAktifUndian);
+        document.getElementById('area-laporan-wa').value = '';
+        simpanData(true);
+        renderUndian();
+        layarKocok.textContent = 'Siap Mengundi';
+      }
+    });
+
+    // ================= FITUR EDIT & ATUR MULTI-BULAN DI MUKA =================
+    window.bukaModalMultiBulan = function(id) {
+      if (!cekHakAksesAdmin()) return;
+      anggotaMultiBulanId = id;
+      const agt = anggota.find(a => (a.id && a.id === id) || a.nama === id);
+      if (!agt) return;
+      document.getElementById('modal-multi-nama').textContent = agt.nama;
+      
+      const titipan = agt.titipanBulan || 0;
+      const totalBulanSaatIni = agt.sudahBayar ? (1 + titipan) : (titipan > 0 ? titipan : 1);
+      
+      document.getElementById('modal-multi-jumlah-bulan').value = totalBulanSaatIni;
+      document.getElementById('modal-multi-judul').textContent = titipan > 0 ? 'Edit Pembayaran di Muka' : 'Bayar Beberapa Bulan ke Depan';
+      
+      updatePreviewMultiBulan();
+      document.getElementById('modal-bayar-multibulan').classList.remove('hidden');
+    };
+
+    window.tutupModalMultiBulan = function() {
+      document.getElementById('modal-bayar-multibulan').classList.add('hidden');
+      anggotaMultiBulanId = null;
+    };
+
+    function updatePreviewMultiBulan() {
+      const jml = parseInt(document.getElementById('modal-multi-jumlah-bulan').value, 10) || 1;
+      document.getElementById('modal-multi-total-bayar').textContent = `Rp ${formatRupiah(jml * TOTAL_IURAN)}`;
+      const cadangan = Math.max(0, jml - 1);
+      document.getElementById('modal-multi-cadangan-teks').textContent = `+${cadangan} Bulan ke Depan`;
+    }
+
+    window.simpanMultiBulan = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (!anggotaMultiBulanId) return;
+      const agt = anggota.find(a => (a.id && a.id === anggotaMultiBulanId) || a.nama === anggotaMultiBulanId);
+      if (!agt) return;
+      const jmlBulan = Math.max(1, parseInt(document.getElementById('modal-multi-jumlah-bulan').value, 10) || 1);
+      
+      agt.sudahBayar = true;
+      agt.titipanBulan = jmlBulan - 1;
+      
+      simpanData(true);
+      renderSetoran();
+      tutupModalMultiBulan();
+      alert(`Pembayaran arisan ${agt.nama} berhasil diperbarui (Lunas + ${agt.titipanBulan} bulan ke depan)!`);
+    };
+
+    window.resetMultiBulan = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (!anggotaMultiBulanId) return;
+      const agt = anggota.find(a => (a.id && a.id === anggotaMultiBulanId) || a.nama === anggotaMultiBulanId);
+      if (!agt) return;
+      if (confirm(`Hapus seluruh cadangan bulan ke depan untuk ${agt.nama}?`)) {
+        agt.titipanBulan = 0;
+        simpanData(true);
+        renderSetoran();
+        tutupModalMultiBulan();
+        alert(`Cadangan bulan ke depan untuk ${agt.nama} berhasil dihapus.`);
+      }
+    };
+
+    // ================= RENDER TAB 2: SETORAN =================
+        function renderSetoran() {
+      const grid = document.getElementById('grid-setoran-anggota');
+      if (!grid) return;
+      grid.innerHTML = '';
+      const anggotaPeriode = anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian));
+
+      let totalLunas = 0, totalTitipanBulan = 0, daftarLunas = [], daftarBelum = [];
+      anggotaPeriode.forEach((item, idx) => {
+        const titipan = item.titipanBulan || 0;
+        const tunggakan = item.tunggakanBulan || 0;
+
+        if (item.sudahBayar) { 
+          totalLunas++; 
+          totalTitipanBulan += titipan;
+          daftarLunas.push(`${item.nama}${titipan > 0 ? ` (+${titipan} bln)` : ''}`); 
+        } else {
+          daftarBelum.push(item.nama);
+        }
+
+        const div = document.createElement('div');
+        div.className = `p-1.5 rounded-lg border flex flex-col justify-center ${item.sudahBayar ? 'bg-emerald-50/70 border-emerald-300' : (tunggakan > 0 ? 'bg-rose-50/50 border-rose-300' : 'bg-slate-50')} gap-1`;
+        div.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5 truncate pr-1 cursor-pointer" onclick="ubahStatusBayar('${item.id || item.nama}')">
+              <input type="checkbox" ${item.sudahBayar ? 'checked' : ''} class="w-3.5 h-3.5 text-emerald-600 rounded pointer-events-none">
+              <span class="text-xs ${item.sudahBayar ? 'text-emerald-950 font-bold' : (tunggakan > 0 ? 'text-rose-900 font-bold' : 'text-slate-700')} truncate">${idx + 1}. ${item.nama}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="bukaModalMultiBulan('${item.id || item.nama}')" class="text-[9px] ${titipan > 0 ? 'bg-amber-50 text-amber-800 border-amber-300' : 'bg-indigo-50 text-indigo-700 border-indigo-200'} font-bold px-1.5 py-0.5 rounded border khusus-admin">
+                ${titipan > 0 ? '✏️ Edit Bln' : '➕ Multi-Bln'}
+              </button>
+              <span onclick="${titipan > 0 ? `bukaModalMultiBulan('${item.id || item.nama}')` : `ubahStatusBayar('${item.id || item.nama}')`}" class="cursor-pointer text-[9px] font-bold px-1.5 py-0.5 rounded-full ${item.sudahBayar ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
+                ${item.sudahBayar ? (titipan > 0 ? `LUNAS (+${titipan})` : 'LUNAS') : 'BELUM'}
+              </span>
+            </div>
+          </div>
+          ${tunggakan > 0 ? `
+          <div class="flex justify-between items-center bg-rose-100/60 p-1 rounded border border-rose-200 khusus-admin">
+            <span class="text-[9px] font-bold text-rose-700">⚠️ Tunggakan: ${tunggakan} Bln (Rp ${formatRupiah(tunggakan * 100000)})</span>
+            <button onclick="lunasiTunggakanSatuBulan('${item.id || item.nama}')" class="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-2 py-0.5 rounded shadow-xs">Bayar 1 Bln</button>
+          </div>` : ''}
+        `;
+        grid.appendChild(div);
+      });
+
+      const totalUangLunas = totalLunas * TOTAL_IURAN;
+      const totalUangTitipan = totalTitipanBulan * TOTAL_IURAN;
+      const totalUangMasuk = totalUangLunas + totalUangTitipan;
+      const totalKasArisan = totalLunas * TARIF_ARISAN;
+      const modeP = parseInt(document.getElementById('pilihan-jumlah-pemenang').value, 10) || 2;
+      const jatah = Math.floor(totalKasArisan / modeP);
+
+      document.getElementById('stat-total-masuk').textContent = `Rp ${formatRupiah(totalUangMasuk)}`;
+      document.getElementById('stat-status-lunas').textContent = totalTitipanBulan > 0 
+        ? `${totalLunas} org lunas | Titipan: Rp ${formatRupiah(totalUangTitipan)}` 
+        : `${totalLunas} dari ${anggotaPeriode.length} lunas`;
+      document.getElementById('stat-kas-arisan').textContent = `Rp ${formatRupiah(totalKasArisan)}`;
+      document.getElementById('stat-per-pemenang').textContent = `Rp ${formatRupiah(jatah)} / pemenang (${modeP} org)`;
+      document.getElementById('stat-kas-konsumsi').textContent = `Rp ${formatRupiah(totalLunas * TARIF_KONSUMSI)}`;
+      document.getElementById('stat-kas-jimpitan').textContent = `Rp ${formatRupiah(totalLunas * TARIF_JIMPITAN)}`;
+
+      let pesanWA = `Assalamu'alaikum wr. wb..\nBerikut REKAP SETORAN ARISAN EMBUGARI (Periode ${periodeAktifUndian})\nBulan: ${ambilBulanTahun()}\n\n`;
+      pesanWA += `✅ *SUDAH BAYAR (${totalLunas} Org):*\n` + (daftarLunas.length ? daftarLunas.map((n,i)=>`${i+1}. ${n}`).join('\n') : '(Belum ada)') + '\n\n';
+      pesanWA += `⏳ *BELUM BAYAR (${anggotaPeriode.length - totalLunas} Org):*\n` + (daftarBelum.length ? daftarBelum.map((n,i)=>`${i+1}. ${n}`).join('\n') : '(Semua lunas)') + '\n\n';
+      pesanWA += `📊 *TOTAL DANA TERKUMPUL: Rp ${formatRupiah(totalUangMasuk)}*\n`;
+      if (totalTitipanBulan > 0) pesanWA += `_(Termasuk uang titipan bulan depan: Rp ${formatRupiah(totalUangTitipan)})_\n\n`;
+      pesanWA += `Terima kasih banyak 🙏😊`;
+      document.getElementById('area-rekap-setoran-wa').value = pesanWA;
+    }
+
+    window.ubahStatusBayar = function(id) {
+          window.lunasiTunggakanSatuBulan = function(id) {
+      if (!cekHakAksesAdmin()) return;
+      const target = anggota.find(a => (a.id && a.id === id) || a.nama === id);
+      if (target && target.tunggakanBulan > 0) {
+        if (confirm(`Lunasi 1 bulan tunggakan untuk ${target.nama} sebesar Rp 100.000?\n\n- Rp 90.000 akan dikembalikan ke Kas Fisik Jimpitan (Dana Talangan lunas).\n- Rp 10.000 akan ditambahkan ke Tabungan Jimpitan anggota tersebut.`)) {
+          target.tunggakanBulan--;
+          if (!target.tabungan) target.tabungan = {};
+          target.tabungan[periodeAktifUndian] = (target.tabungan[periodeAktifUndian] || 0) + TARIF_JIMPITAN;
+          simpanData(true);
+          renderSetoran();
+          renderJimpitan();
+          alert('Pembayaran tunggakan berhasil diproses!');
+        }
+      }
+    };
+      if (!cekHakAksesAdmin()) return;
+      const target = anggota.find(a => (a.id && a.id === id) || a.nama === id);
+      if (target) {
+        if (target.sudahBayar && target.titipanBulan > 0) {
+          if (confirm(`${target.nama} memiliki cadangan setoran (+${target.titipanBulan} Bulan).\n\nBatalkan status bayar bulan ini dan hapus cadangan titipannya?`)) {
+            target.sudahBayar = false;
+            target.titipanBulan = 0;
+          } else {
+            return;
+          }
+        } else {
+          target.sudahBayar = !target.sudahBayar;
+        }
+        simpanData(true);
+        renderSetoran();
+        renderJimpitan();
+      }
+    };
+
+    document.getElementById('btn-semua-lunas').addEventListener('click', () => {
+      if (!cekHakAksesAdmin()) return;
+      anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian)).forEach(a => a.sudahBayar = true);
+      simpanData(true);
+      renderSetoran();
+      renderJimpitan();
+    });
+
+        document.getElementById('btn-reset-setoran').addEventListener('click', () => {
+      if (!cekHakAksesAdmin()) return;
+      const agtP = anggota.filter(a => isAnggotaIkutPeriode(a, periodeAktifUndian));
+      const lotSekarang = parseInt(document.getElementById('input-lot-ke').value, 10) || 10;
+      if (confirm(`Buka setoran Lot ke-${lotSekarang + 1}?\n\nAnggota yang LUNAS tabungannya akan bertambah Rp 10rb.\nAnggota yang BELUM LUNAS otomatis masuk daftar TUNGGAKAN dan kas jimpitan akan ditarik Rp 90rb untuk menalangi mereka.`)) {
+        agtP.forEach(a => {
+          if (a.sudahBayar) {
+            if (!a.tabungan) a.tabungan = {};
+            a.tabungan[periodeAktifUndian] = (a.tabungan[periodeAktifUndian] || 0) + TARIF_JIMPITAN;
+            if (a.titipanBulan && a.titipanBulan > 0) {
+              a.titipanBulan--;
+              a.sudahBayar = true;
+            } else {
+              a.sudahBayar = false;
+            }
+          } else {
+            // Jika belum bayar, masuk ke tunggakan
+            a.tunggakanBulan = (a.tunggakanBulan || 0) + 1;
+            a.sudahBayar = false;
+          }
+        });
+        document.getElementById('input-lot-ke').value = lotSekarang + 1;
+        simpanData(true);
+        renderSetoran();
+        renderJimpitan();
+        alert(`Siklus ditutup! Data tunggakan dan penambahan saldo jimpitan telah diproses otomatis.`);
+      }
+    });
+
+    document.getElementById('tombol-salin-rekap-wa').addEventListener('click', () => {
+      navigator.clipboard.writeText(document.getElementById('area-rekap-setoran-wa').value.trim()).then(() => alert('Rekap setoran berhasil disalin!'));
+    });
+
+    // ================= RENDER TAB 3: BUKU KAS & JIMPITAN =================
+    function renderJimpitan() {
+      const kas = hitungKasGlobal();
+      updateDropdownPeminjam();
+      updateDropdownFilterIndividu();
+      renderGridPartisipanBaru();
+
+      const tglPinjam = document.getElementById('input-pinjam-tanggal');
+      if (tglPinjam && !tglPinjam.value) tglPinjam.value = getTanggalHariIniInput();
+      const tglKeluar = document.getElementById('input-pengeluaran-tanggal');
+      if (tglKeluar && !tglKeluar.value) tglKeluar.value = getTanggalHariIniInput();
+      const tglOps = document.getElementById('input-ops-tanggal');
+      if (tglOps && !tglOps.value) tglOps.value = getTanggalHariIniInput();
+
+      if (anggotaTerpilihIndividuId) tampilkanLaporanIndividu(anggotaTerpilihIndividuId);
+
+      // Kartu Global Saldo & Piutang Menyesuaikan Mode Tamu/Admin
+      document.getElementById('saldo-akhir-jimpitan').textContent = `Rp ${formatRupiah(kas.saldoTunaiFisik)}`;
+            const elKetJimpitan = document.getElementById('ket-kartu-kas-jimpitan');
+      if (elKetJimpitan) {
+        elKetJimpitan.innerHTML = kas.totalDanaTalangan > 0 
+          ? `Telah dikurangi talangan anggota: <strong class="text-rose-300">-Rp ${formatRupiah(kas.totalDanaTalangan)}</strong>` 
+          : 'Total sisa saldo kas jimpitan.';
+      }
+      if (isAdmin) {
+        document.getElementById('saldo-kas-operasional').textContent = `Rp ${formatRupiah(kas.saldoKasOperasional)}`;
+        document.getElementById('badge-saldo-operasional').textContent = `Kas Operasional: Rp ${formatRupiah(kas.saldoKasOperasional)}`;
+        document.getElementById('saldo-piutang-jimpitan').textContent = `Rp ${formatRupiah(kas.totalPiutang)}`;
+        document.getElementById('label-jumlah-peminjam-aktif').textContent = `${kas.jumlahPeminjamAktif} anggota meminjam (Pokok + Admin).`;
+      } else {
+        document.getElementById('saldo-piutang-jimpitan').textContent = `Rp ${formatRupiah(kas.totalPiutangPokok)}`;
+        document.getElementById('label-jumlah-peminjam-aktif').textContent = `${kas.jumlahPeminjamAktif} anggota meminjam (Sisa Pokok).`;
+      }
+
+      document.getElementById('label-total-tabungan-anggota').textContent = `Rp ${formatRupiah(kas.totalTabungan)}`;
+      document.getElementById('label-total-pengeluaran').textContent = `- Rp ${formatRupiah(kas.totalPengeluaran)}`;
+      document.getElementById('label-total-aset-kas').textContent = `Rp ${formatRupiah(kas.totalAsetKekayaan)}`;
+
+      // Render Pinjaman: Diurutkan dari yang terbaru berdasarkan tanggalPinjam
+      const tbodyPinjam = document.getElementById('body-tabel-pinjaman');
+      tbodyPinjam.innerHTML = '';
+      if (pinjamanJimpitan.length === 0) {
+        tbodyPinjam.innerHTML = `<tr><td colspan="${isAdmin ? 9 : 6}" class="p-3 text-center text-slate-400">Belum ada catatan pinjaman kas.</td></tr>`;
+      } else {
+        const pinjamanUrut = pinjamanJimpitan
+          .map((p, idx) => ({ p, indexAsli: idx }))
+          .sort((a, b) => {
+            const timeA = new Date(a.p.tanggalPinjam).getTime() || 0;
+            const timeB = new Date(b.p.tanggalPinjam).getTime() || 0;
+            return timeB - timeA; // Tanggal terbaru di atas
+          });
+
+        pinjamanUrut.forEach(({ p, indexAsli }) => {
+          const pb = parseRiwayatBayar(p);
+          const isLunas = pb.sisaTotal === 0;
+
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50';
+          tr.innerHTML = `
+            <td class="p-2 text-slate-500">${konversiTanggalKeDisplay(p.tanggalPinjam)}</td>
+            <td class="p-2 font-semibold text-slate-800">${p.nama} <span class="text-[9px] text-slate-400 block">${p.keterangan || '-'}</span></td>
+            <td class="p-2 text-right font-bold">Rp ${formatRupiah(pb.pokok)}</td>
+            <td class="p-2 text-right font-semibold text-purple-700 khusus-admin">Rp ${formatRupiah(pb.admin)}</td>
+            <td class="p-2 text-right font-bold text-indigo-950 khusus-admin">Rp ${formatRupiah(pb.totalWajib)}</td>
+            <td class="p-2 text-right font-semibold text-emerald-700">${isAdmin ? 'Rp ' + formatRupiah(pb.sudahPokok + pb.sudahAdmin) : 'Rp ' + formatRupiah(pb.sudahPokok)}</td>
+            <td class="p-2 text-right font-black ${isLunas ? 'text-slate-400' : 'text-rose-600'}">${isAdmin ? 'Rp ' + formatRupiah(pb.sisaTotal) : 'Rp ' + formatRupiah(pb.sisaPokok)}</td>
+            <td class="p-2 text-center"><span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold ${isLunas ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${isLunas ? 'LUNAS' : 'BELUM'}</span></td>
+            <td class="p-2 text-center space-x-1 khusus-admin">
+              ${!isLunas ? `<button onclick="bukaModalBayarAngsuran(${indexAsli})" class="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-0.5 rounded shadow-xs khusus-admin">+ Bayar</button>` : ''}
+              <button onclick="bukaModalRincianAngsuran(${indexAsli})" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-1.5 py-0.5 rounded border border-indigo-200">Rincian</button>
+              <button onclick="bukaModalEditPinjaman(${indexAsli})" class="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold px-1.5 py-0.5 rounded border border-amber-200 khusus-admin">Edit</button>
+              <button onclick="hapusPinjaman(${indexAsli})" class="text-rose-400 hover:text-rose-600 text-xs px-1 font-bold khusus-admin">✕</button>
+            </td>
+          `;
+          tbodyPinjam.appendChild(tr);
+        });
+      }
+
+      // Render Riwayat Pengeluaran Operasional
+      const tbodyOps = document.getElementById('tabel-pengeluaran-operasional');
+      tbodyOps.innerHTML = '';
+      if (pengeluaranOperasional.length === 0) {
+        tbodyOps.innerHTML = `<tr><td colspan="${isAdmin ? 4 : 3}" class="p-2 text-center text-slate-400">Belum ada pengeluaran operasional.</td></tr>`;
+      } else {
+        pengeluaranOperasional.slice().reverse().forEach((op, idx) => {
+          const indexAsli = pengeluaranOperasional.length - 1 - idx;
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-purple-50/50';
+          tr.innerHTML = `
+            <td class="p-2 text-slate-500">${konversiTanggalKeDisplay(op.tanggal)}</td>
+            <td class="p-2 font-semibold text-slate-800">${op.tujuan}</td>
+            <td class="p-2 text-right font-bold text-rose-600">- Rp ${formatRupiah(op.nominal)}</td>
+            <td class="p-2 text-center khusus-admin"><button onclick="hapusPengeluaranOperasional(${indexAsli})" class="text-rose-500 font-bold px-1">✕</button></td>
+          `;
+          tbodyOps.appendChild(tr);
+        });
+      }
+
+      // Render Pengaturan Riwayat Periode (Khusus Admin)
+      const containerSetting = document.getElementById('container-setting-periode');
+      containerSetting.innerHTML = '';
+      const latestId = getPeriodeTerbaru();
+
+            // ================= FITUR BARU: AUTO-SYNC PERIODE AKTIF BERDASARKAN RIWAYAT =================
+      const cfgAktif = configPeriode.find(c => c.id === latestId);
+      if (cfgAktif) {
+        let totalPenerimaAktif = 0;
+        let totalLotAktif = 0;
+        
+        riwayat.forEach(r => {
+          const lotPeriode = r.periode ? parseInt(r.periode, 10) : latestId;
+          if (lotPeriode === latestId) {
+            totalLotAktif++;
+            totalPenerimaAktif += (r.pemenang ? r.pemenang.length : 0);
+          }
+        });
+
+        // 1 Penerima = Rp 5.000. (Jika 2 orang = 10.000, 3 orang = 15.000, dst)
+        cfgAktif.totalLot = totalLotAktif;
+        cfgAktif.standarNominal = totalPenerimaAktif * 5000;
+      }
+      // =======================================================================
+
+
+      configPeriode.forEach(c => {
+        let countAktif = 0, totalKasP = 0;
+        anggota.forEach(a => {
+          const val = (a.tabungan && a.tabungan[c.id]) ? a.tabungan[c.id] : 0;
+          if (val > 0) { countAktif++; totalKasP += val; }
+        });
+        const currentStandar = hitungStandarPeriode(c.id);
+
+        const isAktif = (c.id === latestId);
+        const attrOtomatis = isAktif ? 'readonly title="Otomatis mengikuti tabungan berjalan di bawah"' : '';
+        const cssOtomatis = isAktif ? 'bg-slate-100 text-slate-500 border-dashed cursor-not-allowed' : 'bg-white';
+
+        const div = document.createElement('div');
+        div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 space-y-1.5';
+        div.innerHTML = `
+          <div class="flex justify-between items-center font-bold text-slate-800">
+            <span>${c.nama} ${isAktif ? '<span class="text-[9px] text-emerald-600 font-extrabold">(Aktif)</span>' : ''}</span>
+            <div class="flex items-center gap-1">
+              <select onchange="ubahPenerimaPeriode(${c.id}, this.value)" class="text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-1 py-0.5 rounded font-semibold outline-none">
+                <option value="1" ${c.penerimaPerLot == 1 ? 'selected' : ''}>1 Orang</option>
+                <option value="2" ${c.penerimaPerLot == 2 ? 'selected' : ''}>2 Orang</option>
+                <option value="3" ${c.penerimaPerLot == 3 ? 'selected' : ''}>3 Orang</option>
+                <option value="custom" ${c.penerimaPerLot == 'custom' ? 'selected' : ''}>Kombinasi</option>
+              </select>
+              ${configPeriode.length > 1 ? `<button onclick="hapusPeriode(${c.id})" class="text-rose-500 hover:text-rose-700 font-bold px-0.5">×</button>` : ''}
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-1 text-[11px]">
+            <div class="flex items-center gap-1"><span class="text-slate-400">Lot:</span><input type="number" value="${c.totalLot}" onchange="ubahLotPeriode(${c.id}, this.value)" class="w-10 px-1 py-0.5 font-bold border rounded text-center ${cssOtomatis}" ${attrOtomatis}></div>
+            <div class="flex items-center gap-1 justify-end"><span class="text-slate-400">Rp:</span><input type="number" step="any" min="1000" value="${currentStandar}" onchange="ubahStandarNominalPeriode(${c.id}, this.value)" class="w-16 px-1 py-0.5 font-bold border rounded text-center text-teal-800 ${cssOtomatis}" ${attrOtomatis}></div>
+          </div>
+          <div class="text-[10px] pt-1 border-t flex justify-between items-center">
+            <span class="text-teal-700 font-semibold">Rp ${formatRupiah(currentStandar)}/org</span>
+            <span class="text-indigo-800 font-bold">${countAktif} org (${formatRupiah(totalKasP)})</span>
+          </div>
+        `;
+        containerSetting.appendChild(div);
+      });
+
+      // Filter Tombol Periode Tampilan
+      const barisFilter = document.getElementById('baris-filter-periode');
+      barisFilter.innerHTML = `<button onclick="setFilterPeriode('semua')" class="px-2 py-0.5 rounded font-bold transition ${filterPeriodeAktif === 'semua' ? 'bg-indigo-700 text-white shadow-xs' : 'bg-slate-100 text-slate-600'}">Semua (${anggota.length})</button>`;
+      configPeriode.forEach(c => {
+        let countA = anggota.filter(a => ((a.tabungan && a.tabungan[c.id]) || 0) > 0).length;
+        barisFilter.innerHTML += `<button onclick="setFilterPeriode(${c.id})" class="px-2 py-0.5 rounded font-bold transition ${filterPeriodeAktif === c.id ? 'bg-indigo-700 text-white shadow-xs' : 'bg-slate-100 text-slate-600'}">${c.nama} (${countA})</button>`;
+      });
+
+            // Header Tabel Jimpitan
+      const theadRow = document.getElementById('header-tabel-jimpitan');
+      let headerHtml = `<th class="p-2">No</th><th class="p-2">Nama Anggota</th>`;
+      configPeriode.forEach(c => { headerHtml += `<th class="p-2 text-center">${c.nama}</th>`; });
+      headerHtml += `<th class="p-2 text-right">Bln Ini</th><th class="p-2 text-right text-rose-600">Ditarik</th><th class="p-2 text-right text-amber-600">Pot. Sosial</th><th class="p-2 text-right text-teal-800">Simpanan Bersih</th><th class="p-2 text-center khusus-admin">Aksi</th>`;
+      theadRow.innerHTML = headerHtml;
+
+      const listAnggotaTampil = filterPeriodeAktif === 'semua' ? anggota : anggota.filter(a => ((a.tabungan && a.tabungan[filterPeriodeAktif]) || 0) > 0);
+
+      const tbody = document.getElementById('body-tabel-jimpitan');
+      tbody.innerHTML = '';
+      if (listAnggotaTampil.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${configPeriode.length + (isAdmin ? 7 : 6)}" class="p-4 text-center text-slate-400">Tidak ada anggota yang aktif pada saringan ini.</td></tr>`;
+      } else {
+        listAnggotaTampil.forEach((item, idx) => {
+          const saldoTotal = hitungSaldoAnggota(item);
+          const potSosial = hitungPotonganSosialAnggota(item.id || item.nama);
+          const teksSaldoTotal = saldoTotal < 0 ? `- Rp ${formatRupiah(Math.abs(saldoTotal))}` : `Rp ${formatRupiah(saldoTotal)}`;
+          const warnaSaldoTotal = saldoTotal < 0 ? 'text-rose-600' : 'text-teal-800';
+          
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50';
+
+          let kolomP = '';
+          configPeriode.forEach(c => {
+            const val = (item.tabungan && item.tabungan[c.id]) ? item.tabungan[c.id] : 0;
+            const isAktif = val > 0;
+            kolomP += `
+              <td class="p-1.5 text-center">
+                <button onclick="toggleKeaktifanAnggota('${item.id || item.nama}', ${c.id})" class="px-1.5 py-0.5 rounded text-[10px] font-bold ${isAktif ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-400 border'}">
+                  ${isAktif ? 'Rp ' + formatRupiah(val) : '✕ Non'}
+                </button>
+              </td>
+            `;
+          });
+
+          const blnIniVal = item.sudahBayar ? TARIF_JIMPITAN : 0;
+          tr.innerHTML = `
+            <td class="p-2 text-slate-400 font-mono">${idx + 1}</td>
+            <td class="p-2 font-semibold text-slate-800">${item.nama}</td>
+            ${kolomP}
+            <td class="p-2 text-right font-mono ${blnIniVal > 0 ? 'text-emerald-700 font-bold' : 'text-slate-400'}">${blnIniVal > 0 ? '+' + formatRupiah(blnIniVal) : '-'}</td>
+            <td class="p-2 text-right font-mono text-rose-600">${(item.ditarik > 0) ? '-' + formatRupiah(item.ditarik) : '-'}</td>
+            <td class="p-2 text-right font-mono text-amber-600">${(potSosial > 0) ? '-' + formatRupiah(potSosial) : '-'}</td>
+            <td class="p-2 text-right font-mono font-black ${warnaSaldoTotal} bg-teal-50/50">${teksSaldoTotal}</td>
+            <td class="p-2 text-center space-x-1 khusus-admin">
+              <button onclick="bukaModalEdit('${item.id || item.nama}')" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-1.5 py-0.5 rounded border border-indigo-200">Edit</button>
+              <button onclick="bukaModalTarik('${item.id || item.nama}')" class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold px-1.5 py-0.5 rounded border border-rose-200">Tarik</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Tabel Catat Pengeluaran Kas Jimpitan (Tombol Partisipan Bisa Diklik)
+      const tbodyKeluar = document.getElementById('tabel-pengeluaran-jimpitan');
+      tbodyKeluar.innerHTML = '';
+      if (pengeluaranJimpitan.length === 0) {
+        tbodyKeluar.innerHTML = `<tr><td colspan="${isAdmin ? 5 : 4}" class="p-3 text-center text-slate-400">Belum ada pengeluaran kas dicatat.</td></tr>`;
+      } else {
+        pengeluaranJimpitan.slice().reverse().forEach((p, idx) => {
+          const indexAsli = pengeluaranJimpitan.length - 1 - idx;
+          const partisipan = (p.partisipanIds && Array.isArray(p.partisipanIds)) ? p.partisipanIds : anggota.map(a => a.id || a.nama);
+          const bebanPerOrang = partisipan.length > 0 ? Math.round(p.nominal / partisipan.length) : 0;
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50';
+          tr.innerHTML = `
+            <td class="p-2 text-slate-500">${konversiTanggalKeDisplay(p.tanggal)}</td>
+            <td class="p-2 font-semibold text-slate-800">${p.tujuan}</td>
+            <td class="p-2 text-right text-rose-600 font-bold">- Rp ${formatRupiah(p.nominal)}</td>
+            <td class="p-2 text-center">
+              <button onclick="bukaModalLihatPartisipan(${indexAsli})" class="cursor-pointer hover:bg-teal-100 hover:border-teal-400 transition px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-50 text-teal-800 border border-teal-200 inline-flex items-center gap-1 shadow-2xs" title="Klik untuk melihat nama-nama anggota">
+                👥 ${partisipan.length} org @ Rp ${formatRupiah(bebanPerOrang)}
+              </button>
+            </td>
+            <td class="p-2 text-center space-x-1 khusus-admin">
+              <button onclick="bukaModalEditPengeluaranSosial(${indexAsli})" class="text-[10px] bg-teal-50 text-teal-700 font-semibold px-1.5 py-0.5 rounded border border-teal-200">Edit</button>
+              <button onclick="hapusPengeluaranJimpitan(${indexAsli})" class="text-rose-500 font-bold px-1">✕</button>
+            </td>
+          `;
+          tbodyKeluar.appendChild(tr);
+        });
+      }
+    }
+
+    // Input Pinjaman Baru
+    window.updatePreviewAdminPinjam = function() {
+      const inputNom = document.getElementById('input-pinjam-nominal');
+      const nomStr = inputNom ? inputNom.value : '';
+      const nom = parseInt(String(nomStr).replace(/[^0-9]/g, ''), 10) || 0;
+      const admin = Math.round(nom * 0.05);
+      const total = nom + admin;
+      const el = document.getElementById('preview-admin-info');
+      if (el) el.textContent = `Biaya Admin (5%): Rp ${formatRupiah(admin)} • Total Wajib Dikembalikan: Rp ${formatRupiah(total)}`;
+    };
+
+    window.simpanPinjamanBaru = function(e) {
+      if (e) e.preventDefault();
+      if (!cekHakAksesAdmin()) return;
+      const selectAgt = document.getElementById('input-pinjam-anggota');
+      const agtVal = selectAgt ? selectAgt.value : '';
+      const inputTgl = document.getElementById('input-pinjam-tanggal');
+      const tgl = (inputTgl && inputTgl.value) ? inputTgl.value : getTanggalHariIniInput();
+      const inputNom = document.getElementById('input-pinjam-nominal');
+      const nomVal = inputNom ? inputNom.value : '';
+      const nominal = parseInt(String(nomVal).replace(/[^0-9]/g, ''), 10);
+      const inputKep = document.getElementById('input-pinjam-keperluan');
+      const keperluan = inputKep ? inputKep.value.trim() : '';
+
+      if (!agtVal || isNaN(nominal) || nominal <= 0) {
+        alert('Silakan pilih nama peminjam dan masukkan nominal pokok pinjaman yang valid.');
+        return;
+      }
+
+      const agt = anggota.find(a => (a.id && a.id === agtVal) || a.nama === agtVal);
+      if (!agt) {
+        alert('Data anggota peminjam tidak ditemukan.');
+        return;
+      }
+
+      const admin = Math.round(nominal * 0.05);
+      const totalWajib = nominal + admin;
+
+      const pinjamanBaru = {
+        id: "pinjam_" + Date.now(),
+        anggotaId: agt.id || ("agt_" + Date.now()),
+        nama: agt.nama,
+        tanggalPinjam: tgl,
+        nominalPinjam: nominal,
+        biayaAdmin: admin,
+        totalTagihan: totalWajib,
+        keterangan: keperluan,
+        riwayatBayar: []
+      };
+
+      pinjamanJimpitan.push(pinjamanBaru);
+
+      if (inputNom) inputNom.value = '';
+      if (inputKep) inputKep.value = '';
+      updatePreviewAdminPinjam();
+      simpanData(true);
+      renderJimpitan();
+      alert(`Pinjaman atas nama ${agt.nama} sebesar Rp ${formatRupiah(nominal)} (Admin 5%: Rp ${formatRupiah(admin)}) berhasil disimpan!`);
+    };
+
+    // Pengeluaran Operasional
+    window.simpanPengeluaranOperasional = function(e) {
+      if (e) e.preventDefault();
+      if (!cekHakAksesAdmin()) return;
+      const tgl = document.getElementById('input-ops-tanggal').value || getTanggalHariIniInput();
+      const tujuan = document.getElementById('input-ops-tujuan').value.trim();
+      const inputNom = document.getElementById('input-ops-nominal');
+      const nomStr = inputNom ? inputNom.value : '';
+      const nominal = parseInt(String(nomStr).replace(/[^0-9]/g, ''), 10);
+      if (!tujuan || isNaN(nominal) || nominal <= 0) return alert('Lengkapi data pengeluaran operasional.');
+
+      pengeluaranOperasional.push({
+        id: "ops_" + Date.now(),
+        tanggal: tgl,
+        tujuan: tujuan,
+        nominal: nominal
+      });
+
+      document.getElementById('input-ops-tujuan').value = '';
+      if (inputNom) inputNom.value = '';
+      simpanData(true);
+      renderJimpitan();
+      alert(`Pengeluaran operasional Rp ${formatRupiah(nominal)} berhasil dicatat!`);
+    };
+
+    window.hapusPengeluaranOperasional = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      if (confirm('Hapus catatan pengeluaran operasional ini?')) {
+        pengeluaranOperasional.splice(index, 1);
+        simpanData(true);
+        renderJimpitan();
+      }
+    };
+
+    // Pengeluaran Kas Jimpitan
+    window.simpanPengeluaranSosial = function(e) {
+      if (e) e.preventDefault();
+      if (!cekHakAksesAdmin()) return;
+      const tgl = document.getElementById('input-pengeluaran-tanggal').value || getTanggalHariIniInput();
+      const tujuan = document.getElementById('input-tujuan-pengeluaran').value.trim();
+      const inputNom = document.getElementById('input-nominal-pengeluaran');
+      const nomStr = inputNom ? inputNom.value : '';
+      const nominal = parseInt(String(nomStr).replace(/[^0-9]/g, ''), 10);
+      const cbs = document.querySelectorAll('input[name="partisipan_baru"]:checked');
+      const partisipanIds = Array.from(cbs).map(cb => cb.value);
+
+      if (!tujuan || isNaN(nominal) || nominal <= 0) return alert('Lengkapi data pengeluaran kas.');
+      if (!partisipanIds.length) return alert('Pilih minimal 1 partisipan.');
+
+      pengeluaranJimpitan.push({
+        id: "keluar_" + Date.now(),
+        tanggal: tgl,
+        tujuan: tujuan,
+        nominal: nominal,
+        partisipanIds: partisipanIds
+      });
+
+      document.getElementById('input-tujuan-pengeluaran').value = '';
+      if (inputNom) inputNom.value = '';
+      simpanData(true);
+      renderJimpitan();
+      alert('Pengeluaran kas berhasil disimpan!');
+    };
+
+    window.bukaModalEditPengeluaranSosial = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      indeksPengeluaranSosialDiedit = index;
+      const p = pengeluaranJimpitan[index];
+      document.getElementById('modal-edit-keluar-tanggal').value = konversiDisplayKeInput(p.tanggal);
+      document.getElementById('modal-edit-keluar-tujuan').value = p.tujuan;
+      document.getElementById('modal-edit-keluar-nominal').value = p.nominal;
+      renderGridPartisipanEdit(p.partisipanIds);
+      document.getElementById('modal-edit-pengeluaran-sosial').classList.remove('hidden');
+    };
+
+    window.tutupModalEditPengeluaranSosial = function() { document.getElementById('modal-edit-pengeluaran-sosial').classList.add('hidden'); indeksPengeluaranSosialDiedit = null; };
+
+    window.simpanModalEditPengeluaranSosial = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (indeksPengeluaranSosialDiedit === null) return;
+      const p = pengeluaranJimpitan[indeksPengeluaranSosialDiedit];
+      const nomStr = document.getElementById('modal-edit-keluar-nominal').value;
+      const nominal = parseInt(String(nomStr).replace(/[^0-9]/g, ''), 10);
+      const cbs = document.querySelectorAll('input[name="partisipan_edit"]:checked');
+      const partisipanIds = Array.from(cbs).map(cb => cb.value);
+      if (isNaN(nominal) || nominal <= 0 || !partisipanIds.length) return alert('Data pengeluaran tidak lengkap.');
+      p.tanggal = document.getElementById('modal-edit-keluar-tanggal').value || getTanggalHariIniInput();
+      p.tujuan = document.getElementById('modal-edit-keluar-tujuan').value.trim();
+      p.nominal = nominal;
+      p.partisipanIds = partisipanIds;
+      simpanData(true);
+      renderJimpitan();
+      tutupModalEditPengeluaranSosial();
+    };
+
+    window.hapusPengeluaranJimpitan = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      if (confirm('Hapus catatan pengeluaran kas ini?')) {
+        pengeluaranJimpitan.splice(index, 1);
+        simpanData(true);
+        renderJimpitan();
+      }
+    };
+
+    window.bukaModalEditPinjaman = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      indeksPinjamanDiedit = index;
+      const p = pinjamanJimpitan[index];
+      if (!p) return;
+      const select = document.getElementById('modal-edit-pinjam-anggota');
+      select.innerHTML = '';
+      anggota.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id || a.nama;
+        opt.textContent = a.nama;
+        if (opt.value === p.anggotaId || a.nama === p.nama) opt.selected = true;
+        select.appendChild(opt);
+      });
+      document.getElementById('modal-edit-pinjam-tanggal').value = konversiDisplayKeInput(p.tanggalPinjam);
+      document.getElementById('modal-edit-pinjam-nominal').value = p.nominalPinjam;
+      document.getElementById('modal-edit-pinjam-keperluan').value = p.keterangan || '';
+      document.getElementById('modal-edit-pinjaman').classList.remove('hidden');
+    };
+
+    window.tutupModalEditPinjaman = function() { document.getElementById('modal-edit-pinjaman').classList.add('hidden'); indeksPinjamanDiedit = null; };
+
+    window.simpanModalEditPinjaman = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (indeksPinjamanDiedit === null) return;
+      const p = pinjamanJimpitan[indeksPinjamanDiedit];
+      const agtVal = document.getElementById('modal-edit-pinjam-anggota').value;
+      const inputNom = document.getElementById('modal-edit-pinjam-nominal');
+      const nominal = parseInt(String(inputNom.value).replace(/[^0-9]/g, ''), 10);
+      if (isNaN(nominal) || nominal <= 0) return alert('Nominal harus valid.');
+      const agt = anggota.find(a => (a.id && a.id === agtVal) || a.nama === agtVal);
+      if (agt) { p.anggotaId = agt.id || p.anggotaId; p.nama = agt.nama; }
+      p.tanggalPinjam = document.getElementById('modal-edit-pinjam-tanggal').value || getTanggalHariIniInput();
+      p.nominalPinjam = nominal;
+      p.biayaAdmin = Math.round(nominal * 0.05);
+      p.totalTagihan = nominal + p.biayaAdmin;
+      p.keterangan = document.getElementById('modal-edit-pinjam-keperluan').value.trim();
+      simpanData(true);
+      renderJimpitan();
+      tutupModalEditPinjaman();
+    };
+
+    window.bukaModalBayarAngsuran = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      pinjamanSedangDibayar = pinjamanJimpitan[index];
+      if (!pinjamanSedangDibayar) return;
+      const pb = parseRiwayatBayar(pinjamanSedangDibayar);
+
+      document.getElementById('modal-bayar-nama').textContent = pinjamanSedangDibayar.nama;
+      document.getElementById('modal-bayar-sisa').textContent = `Rp ${formatRupiah(pb.sisaTotal)}`;
+      document.getElementById('modal-bayar-sisa-pokok').textContent = `Rp ${formatRupiah(pb.sisaPokok)}`;
+      document.getElementById('modal-bayar-sisa-admin').textContent = `Rp ${formatRupiah(pb.sisaAdmin)}`;
+      
+      document.getElementById('modal-bayar-tanggal').value = getTanggalHariIniInput();
+      document.getElementById('modal-bayar-pokok').value = Math.round(pb.sisaPokok);
+      document.getElementById('modal-bayar-admin').value = Math.round(pb.sisaAdmin);
+      document.getElementById('modal-bayar-catatan').value = `Cicilan ke-${(pinjamanSedangDibayar.riwayatBayar || []).length + 1}`;
+      document.getElementById('modal-bayar-angsuran').classList.remove('hidden');
+    };
+
+    window.tutupModalBayarAngsuran = function() { document.getElementById('modal-bayar-angsuran').classList.add('hidden'); pinjamanSedangDibayar = null; };
+
+    window.simpanModalBayarAngsuran = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (!pinjamanSedangDibayar) return;
+      
+      const pok = parseInt(document.getElementById('modal-bayar-pokok').value) || 0;
+      const adm = parseInt(document.getElementById('modal-bayar-admin').value) || 0;
+      
+      if (pok < 0 || adm < 0 || (pok === 0 && adm === 0)) return alert('Nominal pembayaran tidak valid.');
+      
+      if (!pinjamanSedangDibayar.riwayatBayar) pinjamanSedangDibayar.riwayatBayar = [];
+      pinjamanSedangDibayar.riwayatBayar.push({
+        id: "byr_" + Date.now(),
+        tanggal: document.getElementById('modal-bayar-tanggal').value || getTanggalHariIniInput(),
+        nominal: pok + adm,
+        nominalPokok: pok,
+        nominalAdmin: adm,
+        catatan: document.getElementById('modal-bayar-catatan').value.trim() || "Angsuran pinjaman"
+      });
+      
+      simpanData(true);
+      renderJimpitan();
+      tutupModalBayarAngsuran();
+      alert('Setoran angsuran berhasil dicatat!');
+    };
+
+    window.bukaModalRincianAngsuran = function(index) {
+      pinjamanAktifRincianIndex = index;
+      const p = pinjamanJimpitan[index];
+      if (!p) return;
+      const pb = parseRiwayatBayar(p);
+
+      document.getElementById('modal-rincian-nama').textContent = `Rincian: ${p.nama}`;
+      document.getElementById('modal-rincian-ringkasan').innerHTML = `
+        <div class="flex justify-between"><span>Pokok Pinjaman:</span> <strong>Rp ${formatRupiah(pb.pokok)}</strong></div>
+        <div class="flex justify-between text-purple-700"><span>Biaya Admin (5%):</span> <strong>Rp ${formatRupiah(pb.admin)}</strong></div>
+        <div class="flex justify-between font-bold text-slate-800"><span>Total Wajib:</span> <strong>Rp ${formatRupiah(pb.totalWajib)}</strong></div>
+        <div class="flex justify-between text-emerald-700 border-t pt-0.5 mt-0.5"><span>Sudah Bayar Pokok:</span> <strong>Rp ${formatRupiah(pb.sudahPokok)}</strong></div>
+        <div class="flex justify-between text-emerald-700"><span>Sudah Bayar Admin:</span> <strong>Rp ${formatRupiah(pb.sudahAdmin)}</strong></div>
+        <div class="flex justify-between font-bold text-rose-700 border-t pt-0.5"><span>Sisa Tagihan (Pokok+Admin):</span> <strong>Rp ${formatRupiah(pb.sisaTotal)}</strong></div>
+      `;
+      const tbody = document.getElementById('modal-rincian-tbody');
+      tbody.innerHTML = '';
+      if (!p.riwayatBayar || p.riwayatBayar.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 5 : 4}" class="p-2 text-center text-slate-400">Belum ada setoran angsuran.</td></tr>`;
+      } else {
+        p.riwayatBayar.forEach((r, idxA) => {
+          const nPokok = r.nominalPokok !== undefined ? r.nominalPokok : (r.nominal - (r.nominal * (pb.totalWajib > 0 ? pb.admin/pb.totalWajib : 0)));
+          const nAdmin = r.nominalAdmin !== undefined ? r.nominalAdmin : (r.nominal * (pb.totalWajib > 0 ? pb.admin/pb.totalWajib : 0));
+          
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="p-1.5 text-slate-500">${konversiTanggalKeDisplay(r.tanggal)}</td>
+            <td class="p-1.5 font-bold text-emerald-700 text-right">Rp ${formatRupiah(nPokok)}</td>
+            <td class="p-1.5 font-bold text-purple-700 text-right khusus-admin">Rp ${formatRupiah(nAdmin)}</td>
+            <td class="p-1.5 text-slate-700">${r.catatan}</td>
+            <td class="p-1.5 text-center space-x-1 khusus-admin">
+              <button onclick="bukaModalEditSatuanAngsuran(${idxA})" class="text-[9px] bg-amber-50 text-amber-700 px-1 py-0.5 rounded border">Edit</button>
+              <button onclick="hapusSatuanAngsuran(${idxA})" class="text-[9px] text-rose-500 font-bold px-1">✕</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+      document.getElementById('modal-rincian-angsuran').classList.remove('hidden');
+    };
+
+    window.tutupModalRincianAngsuran = function() { document.getElementById('modal-rincian-angsuran').classList.add('hidden'); pinjamanAktifRincianIndex = null; };
+
+    window.bukaModalEditSatuanAngsuran = function(idxA) {
+      if (!cekHakAksesAdmin()) return;
+      if (pinjamanAktifRincianIndex === null) return;
+      indeksAngsuranSatuanDiedit = idxA;
+      const p = pinjamanJimpitan[pinjamanAktifRincianIndex];
+      const r = p.riwayatBayar[idxA];
+      
+      const adminRasio = p.totalTagihan > 0 ? p.biayaAdmin / p.totalTagihan : 0;
+      const nPokok = r.nominalPokok !== undefined ? r.nominalPokok : Math.round(r.nominal - (r.nominal * adminRasio));
+      const nAdmin = r.nominalAdmin !== undefined ? r.nominalAdmin : Math.round(r.nominal * adminRasio);
+
+      document.getElementById('modal-edit-angsuran-tanggal').value = konversiDisplayKeInput(r.tanggal);
+      document.getElementById('modal-edit-angsuran-pokok').value = nPokok;
+      document.getElementById('modal-edit-angsuran-admin').value = nAdmin;
+      document.getElementById('modal-edit-angsuran-catatan').value = r.catatan || '';
+      document.getElementById('modal-edit-satuan-angsuran').classList.remove('hidden');
+    };
+
+    window.tutupModalEditSatuanAngsuran = function() { document.getElementById('modal-edit-satuan-angsuran').classList.add('hidden'); indeksAngsuranSatuanDiedit = null; };
+
+    window.simpanModalEditSatuanAngsuran = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (pinjamanAktifRincianIndex === null || indeksAngsuranSatuanDiedit === null) return;
+      const r = pinjamanJimpitan[pinjamanAktifRincianIndex].riwayatBayar[indeksAngsuranSatuanDiedit];
+      
+      const pok = parseInt(document.getElementById('modal-edit-angsuran-pokok').value) || 0;
+      const adm = parseInt(document.getElementById('modal-edit-angsuran-admin').value) || 0;
+      if (pok < 0 || adm < 0 || (pok === 0 && adm === 0)) return alert('Nominal pembayaran tidak valid.');
+      
+      r.tanggal = document.getElementById('modal-edit-angsuran-tanggal').value || getTanggalHariIniInput();
+      r.nominal = pok + adm;
+      r.nominalPokok = pok;
+      r.nominalAdmin = adm;
+      r.catatan = document.getElementById('modal-edit-angsuran-catatan').value.trim();
+      
+      simpanData(true);
+      renderJimpitan();
+      tutupModalEditSatuanAngsuran();
+      bukaModalRincianAngsuran(pinjamanAktifRincianIndex);
+    };
+
+    window.hapusSatuanAngsuran = function(idxA) {
+      if (!cekHakAksesAdmin()) return;
+      if (pinjamanAktifRincianIndex === null) return;
+      if (confirm('Hapus angsuran ini?')) {
+        pinjamanJimpitan[pinjamanAktifRincianIndex].riwayatBayar.splice(idxA, 1);
+        simpanData(true);
+        renderJimpitan();
+        bukaModalRincianAngsuran(pinjamanAktifRincianIndex);
+      }
+    };
+
+    window.hapusPinjaman = function(index) {
+      if (!cekHakAksesAdmin()) return;
+      if (confirm(`Hapus seluruh data pinjaman ${pinjamanJimpitan[index].nama}?`)) {
+        pinjamanJimpitan.splice(index, 1);
+        simpanData(true);
+        renderJimpitan();
+      }
+    };
+
+    document.getElementById('tombol-salin-pinjaman-wa').addEventListener('click', () => {
+      const kas = hitungKasGlobal();
+      let teks = `*REKAP PINJAMAN KAS JIMPITAN EMBUGARI*\nPer: ${ambilTanggalLengkap()}\n\n`;
+      if (!pinjamanJimpitan.length) teks += `Alhamdulillah tidak ada anggota yang memiliki pinjaman saat ini.\n\n`;
+      else {
+        const pinjamanUrut = [...pinjamanJimpitan].sort((a, b) => {
+          const timeA = new Date(a.tanggalPinjam).getTime() || 0;
+          const timeB = new Date(b.tanggalPinjam).getTime() || 0;
+          return timeB - timeA;
+        });
+
+        pinjamanUrut.forEach((p, idx) => {
+          const pb = parseRiwayatBayar(p);
+          teks += `${idx+1}. *${p.nama}*\n   • Tgl: ${konversiTanggalKeDisplay(p.tanggalPinjam)}\n   • Pokok: Rp ${formatRupiah(pb.pokok)} | Admin 5%: Rp ${formatRupiah(pb.admin)}\n   • Sisa Tagihan: ${pb.sisaTotal === 0 ? 'LUNAS ✅' : 'Rp ' + formatRupiah(pb.sisaTotal) + ' ⏳'}\n`;
+        });
+      }
+      teks += `\n💵 Saldo Kas Jimpitan: Rp ${formatRupiah(kas.saldoTunaiFisik)}`;
+      if (isAdmin) teks += ` | Kas Operasional (Admin 5%): Rp ${formatRupiah(kas.saldoKasOperasional)}`;
+      navigator.clipboard.writeText(teks).then(() => alert('Rekap pinjaman berhasil disalin!'));
+    });
+
+    window.toggleKeaktifanAnggota = function(agtId, pId) {
+      if (!cekHakAksesAdmin()) return;
+      const agt = anggota.find(a => (a.id && a.id === agtId) || a.nama === agtId);
+      if (!agt) return;
+      if (!agt.tabungan) agt.tabungan = {};
+      const statusSekarang = ((agt.tabungan[pId] || 0) > 0);
+      agt.tabungan[pId] = !statusSekarang ? hitungStandarPeriode(pId) : 0;
+      if (agt.ikutPeriode) agt.ikutPeriode[pId] = !statusSekarang;
+      simpanData(true);
+      renderJimpitan();
+      renderUndian();
+    };
+
+    window.setFilterPeriode = function(filter) { filterPeriodeAktif = filter; renderJimpitan(); };
+    window.ubahPenerimaPeriode = function(id, val) { if (!cekHakAksesAdmin()) return; const t = configPeriode.find(c => c.id === id); if (t) { t.penerimaPerLot = val; simpanData(true); renderJimpitan(); } };
+    
+    window.hapusPeriode = function(id) {
+      if (!cekHakAksesAdmin()) return;
+      const t = configPeriode.find(c => c.id === id);
+      if (!t || !confirm(`Hapus ${t.nama}?`)) return;
+      configPeriode = configPeriode.filter(c => c.id !== id);
+      anggota.forEach(a => { if (a.tabungan) delete a.tabungan[id]; if (a.ikutPeriode) delete a.ikutPeriode[id]; });
+      if (filterPeriodeAktif === id) filterPeriodeAktif = 'semua';
+      periodeAktifUndian = getPeriodeTerbaru();
+      simpanData(true);
+      renderJimpitan();
+      renderUndian();
+    };
+    
+    window.ubahLotPeriode = function(id, val) { if (!cekHakAksesAdmin()) return; const l = parseInt(val, 10); if (!isNaN(l)) { const t = configPeriode.find(c => c.id === id); if (t) { t.totalLot = l; simpanData(true); renderJimpitan(); } } };
+
+    window.tambahPeriodeBaru = function() {
+      if (!cekHakAksesAdmin()) return;
+      const pBaru = getPeriodeTerbaru() + 1;
+      const mode = confirm(`Periode ke-${pBaru} menggunakan 2 PEMENANG per lot? (OK = 2 Pemenang, Batal = 1 Pemenang)`) ? 2 : 1;
+      configPeriode.push({ id: pBaru, nama: `Periode ${pBaru}`, penerimaPerLot: mode, totalLot: 0, standarNominal: 0, jimpitanPerLot: 10000 });
+      anggota.forEach(a => { if (!a.tabungan) a.tabungan = {}; if (!a.ikutPeriode) a.ikutPeriode = {}; a.tabungan[pBaru] = 0; a.ikutPeriode[pBaru] = true; });
+      periodeAktifUndian = pBaru;
+      simpanData(true);
+      renderTabAktif();
+      alert(`Periode ${pBaru} berhasil ditambahkan dan langsung aktif!`);
+    };
+
+    window.bukaModalEdit = function(id) {
+      if (!cekHakAksesAdmin()) return;
+      anggotaSedangDiedit = anggota.find(a => (a.id && a.id === id) || a.nama === id);
+      if (!anggotaSedangDiedit) return;
+      document.getElementById('modal-edit-nama-anggota').textContent = anggotaSedangDiedit.nama;
+      const ctn = document.getElementById('modal-container-input-periode');
+      ctn.innerHTML = '';
+      configPeriode.forEach(c => {
+        const val = (anggotaSedangDiedit.tabungan && anggotaSedangDiedit.tabungan[c.id]) ? anggotaSedangDiedit.tabungan[c.id] : 0;
+        ctn.innerHTML += `<div><label class="font-semibold block text-slate-600">${c.nama} (Rp):</label><input type="number" id="input-edit-p-${c.id}" value="${val}" step="any" min="1000" class="w-full px-2 py-1 border rounded font-bold"></div>`;
+      });
+      ctn.innerHTML += `<div><label class="font-semibold block text-rose-700">Pernah Ditarik (Rp):</label><input type="number" id="input-edit-ditarik" value="${anggotaSedangDiedit.ditarik || 0}" step="any" min="1000" class="w-full px-2 py-1 border rounded text-rose-700 font-bold"></div>`;
+      document.getElementById('modal-edit-jimpitan').classList.remove('hidden');
+    };
+
+    window.tutupModalEdit = function() { document.getElementById('modal-edit-jimpitan').classList.add('hidden'); anggotaSedangDiedit = null; };
+
+    window.simpanModalEdit = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (!anggotaSedangDiedit) return;
+      configPeriode.forEach(c => {
+        const inp = document.getElementById(`input-edit-p-${c.id}`);
+        if (inp) {
+          const val = parseInt(String(inp.value).replace(/[^0-9]/g, ''), 10) || 0;
+          anggotaSedangDiedit.tabungan[c.id] = val;
+          if (anggotaSedangDiedit.ikutPeriode) anggotaSedangDiedit.ikutPeriode[c.id] = val > 0;
+        }
+      });
+      const inpTarik = document.getElementById('input-edit-ditarik');
+      if (inpTarik) anggotaSedangDiedit.ditarik = parseInt(String(inpTarik.value).replace(/[^0-9]/g, ''), 10) || 0;
+      simpanData(true);
+      renderJimpitan();
+      renderUndian();
+      tutupModalEdit();
+    };
+
+    window.bukaModalTarik = function(id) {
+      if (!cekHakAksesAdmin()) return;
+      anggotaSedangDitarik = anggota.find(a => (a.id && a.id === id) || a.nama === id);
+      if (!anggotaSedangDitarik) return;
+      const saldo = hitungSaldoAnggota(anggotaSedangDitarik);
+      document.getElementById('modal-tarik-nama').textContent = anggotaSedangDitarik.nama;
+      document.getElementById('modal-tarik-saldo').textContent = `Rp ${formatRupiah(saldo)}`;
+      document.getElementById('modal-tarik-nominal').value = saldo;
+      document.getElementById('modal-tarik-jimpitan').classList.remove('hidden');
+    };
+
+    window.tutupModalTarik = function() { document.getElementById('modal-tarik-jimpitan').classList.add('hidden'); anggotaSedangDitarik = null; };
+
+    window.simpanModalTarik = function() {
+      if (!cekHakAksesAdmin()) return;
+      if (!anggotaSedangDitarik) return;
+      const nominal = parseInt(String(document.getElementById('modal-tarik-nominal').value).replace(/[^0-9]/g, ''), 10);
+      if (isNaN(nominal) || nominal <= 0) return alert('Nominal harus valid.');
+      anggotaSedangDitarik.ditarik = (anggotaSedangDitarik.ditarik || 0) + nominal;
+      pengeluaranJimpitan.push({
+        id: "keluar_" + Date.now(),
+        tanggal: getTanggalHariIniInput(),
+        tujuan: `Pengembalian Jimpitan: ${anggotaSedangDitarik.nama} (${document.getElementById('modal-tarik-alasan').value.trim()})`,
+        nominal: nominal,
+        partisipanIds: [anggotaSedangDitarik.id || anggotaSedangDitarik.nama]
+      });
+      simpanData(true);
+      renderJimpitan();
+      tutupModalTarik();
+      alert('Penarikan dana jimpitan berhasil dicatat!');
+    };
+
+    document.getElementById('tombol-salin-tabungan-wa').addEventListener('click', () => {
+      const kas = hitungKasGlobal();
+      let teks = `*REKAP BUKU TABUNGAN JIMPITAN EMBUGARI*\nPer: ${ambilTanggalLengkap()}\n\n`;
+      const listA = filterPeriodeAktif === 'semua' ? anggota : anggota.filter(a => ((a.tabungan && a.tabungan[filterPeriodeAktif]) || 0) > 0);
+      listA.forEach((item, idx) => { 
+        const saldo = hitungSaldoAnggota(item);
+        const teksSaldo = saldo < 0 ? `- Rp ${formatRupiah(Math.abs(saldo))}` : `Rp ${formatRupiah(saldo)}`;
+        teks += `${idx + 1}. *${item.nama}*: ${teksSaldo}\n`; 
+      });
+      teks += `\n💰 Saldo Kas Jimpitan: Rp ${formatRupiah(kas.saldoTunaiFisik)}`;
+      navigator.clipboard.writeText(teks).then(() => alert('Rekap tabungan berhasil disalin!'));
+    });
+
+    // Backup & Impor Handlers
+    window.bukaModalBackup = function() {
+      document.getElementById('area-teks-backup').value = ambilSnapshotState();
+      document.getElementById('modal-backup-teks').classList.remove('hidden');
+    };
+    window.tutupModalBackup = function() { document.getElementById('modal-backup-teks').classList.add('hidden'); };
+
+    window.salinTeksBackupKeClipboard = function() {
+      const area = document.getElementById('area-teks-backup');
+      navigator.clipboard.writeText(area.value).then(() => alert('Teks cadangan disalin! Silakan tempelkan ke chat WhatsApp.'));
+    };
+
+    window.cadangkanFileJSONLangsung = function() {
+      const a = document.createElement('a');
+      a.href = "data:text/json;charset=utf-8," + encodeURIComponent(ambilSnapshotState());
+      a.download = `backup_arisan_embugari_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+
+    window.bukaModalImpor = function() {
+      if (!cekHakAksesAdmin()) return;
+      document.getElementById('area-teks-impor').value = '';
+      document.getElementById('modal-impor-teks').classList.remove('hidden');
+    };
+    window.tutupModalImpor = function() { document.getElementById('modal-impor-teks').classList.add('hidden'); };
+
+    function prosesImporDataObjek(data) {
+      if (!cekHakAksesAdmin()) return;
+      if (!data || !data.anggota || !Array.isArray(data.anggota)) return alert('Format data tidak sesuai.');
+      if (confirm(`Pulihkan arisan dengan total ${data.anggota.length} anggota? Data di cloud juga akan diperbarui.`)) {
+        anggota = data.anggota;
+        riwayat = data.riwayat || [];
+        pengeluaranJimpitan = data.pengeluaranJimpitan || [];
+        pengeluaranOperasional = data.pengeluaranOperasional || [];
+        configPeriode = data.configPeriode || DEFAULT_CONFIG_PERIODE;
+        pinjamanJimpitan = data.pinjamanJimpitan || [];
+        periodeAktifUndian = getPeriodeTerbaru();
+
+        if (!configPeriode.find(c => c.id === 4)) {
+          configPeriode.push({ id: 4, nama: "Periode 4", penerimaPerLot: 2, totalLot: 16, standarNominal: 160000, jimpitanPerLot: 10000 });
+        }
+        const p3 = configPeriode.find(c => c.id === 3);
+        if (p3) { p3.totalLot = 12; p3.standarNominal = 125000; }
+
+        normalisasiData();
+        simpanData(true);
+        renderTabAktif();
+        tutupModalImpor();
+        alert('Data berhasil dipulihkan dan disinkronkan ke server cloud!');
+      }
+    }
+
+    window.pulihkanDariTeks = function() {
+      try { prosesImporDataObjek(JSON.parse(document.getElementById('area-teks-impor').value.trim())); }
+      catch(err) { alert('Kode teks cadangan tidak valid.'); }
+    };
+
+    window.pulihkanDariFile = function(e) {
+      const f = e.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try { prosesImporDataObjek(JSON.parse(ev.target.result)); }
+        catch(err) { alert('File cadangan tidak valid.'); }
+      };
+      reader.readAsText(f);
+      e.target.value = '';
+    };
+
+    // Inisialisasi Pertama
+    rekamState();
+    perbaruiStatusTampilanAdmin();
+    mulaiSinkronisasiCloud();
+  </script>
+</body>
+</html>
